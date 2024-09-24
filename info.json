@@ -1,0 +1,13 @@
+{
+    "name": "Rhythm Spell Caster",
+    "summary": "Can you keep up the beat and cast spells in synch with the music?",
+    "description": "In Rhythm Spell Caster you are a socerer that can only move on the music beat, and also can only cast spells by doing the enchant at the beat.\nGame controls:\n\n- Press ARROWS to move the character.\n- Hold X/A2 to start casting a spell.\n- Press Z/A1 to release the casted spell.",
+    "status": "prototype",
+    "tags": ["dungeon crawler", "2d", "roguelike"],
+    "authors": [{
+        "name": "Lyno Ferraz",
+        "link": "https://github.com/lynoferraz"
+    }],
+    "url": "https://github.com/lynoferraz/rhythm-caster",
+    "links": ["https://github.com/lynoferraz/rhythm-caster"]
+}
