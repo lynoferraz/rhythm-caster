@@ -222,7 +222,7 @@ static int16_t map[MAP_LAYERS][MAP_SIZE][MAP_SIZE] = {
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,1,-1,-1,},
+        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
@@ -336,6 +336,16 @@ static bool unlocked_spells[] = {
     false, //SECRET_SPELL,
 };
 
+static int16_t chest_unlock_spell[] = {
+    0, //FROSTBITE1_SPELL,
+    1, //FROSTBITE2_SPELL,
+    2, //FROSTBITE3_SPELL,
+    1, //FIREBALL_SPELL,
+    2, //WINDSLASH_SPELL,
+    3, //NOVA_SPELL,
+    0, //PROTECTION_SPELL,
+    4, //SECRET_SPELL,
+};
 static int frostbite_colors[] = {
     RIV_COLOR_WHITE,RIV_COLOR_LIGHTGREY, RIV_COLOR_LIGHTSLATE, RIV_COLOR_LIGHTBLUE,RIV_COLOR_LIGHTTEAL,RIV_COLOR_WHITE,RIV_COLOR_LIGHTGREY
 };
@@ -387,6 +397,7 @@ int start_frame;
 int music_bpm = 0;
 int last_note_frame = -1;
 int last_beat_frame;
+int last_beat_frame_press;
 // int note_frame;
 // int note_frame_start = 0;
 // int note_frame_end = 0;
@@ -420,7 +431,7 @@ int n_frostbite_colors;
 int last_move_frame = 0;
 int last_move_dir = 0;
 riv_recti wizard_bbox;
-int life_points;
+int life_points = 1;
 uint8_t protection_circles;
 
 int score;
@@ -435,11 +446,12 @@ int monster_speed;
 int monster_moving_frames;
 
 bool board_help;
-bool chest_help;
+int chest_help;
+int unlocked_chests;
 int help_frame;
 
 // config
-float synch_factor = 0.5;
+float synch_factor = 0.3;
 int starting_life_points = 10;
 int kill_bonus = 500;
 static int monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
@@ -449,6 +461,16 @@ static int monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
 static int monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
 static int monster_ssids[MAX_MONSTER_TYPES];
 static int monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
+int spawn_decrease_interval = 5;
+bool display_grid_lines = false;
+
+uint8_t n_unlockable_objects;
+static int unlockable_objects[][4] = { // beat_frame,x,y,obj
+    {0,13,12,1},
+    {80,14,4,1},
+    {200,7,9,17},
+    {500,6,14,30}
+}; 
 
 ////
 // Aux functions
@@ -463,6 +485,7 @@ void start_game() {
     synch_hit = (int)(frames_per_beat * synch_factor);
     moving_frames = (int)ceil(frames_per_beat / 4);
     speed = (int)ceil((1.0*TILE_SIZE)/moving_frames);
+    last_beat_frame_press = 0;
     // release_spell_anim_frames = (int)ceil(frames_per_beat * 6 / 4);
 
     int minx = CHARACTER_SIZE;
@@ -478,6 +501,33 @@ void start_game() {
     }
     int got_colors = 0;
     int sps_width = riv->images[riv->spritesheets[wizard_sps].image_id].width;
+    if (minx + maxw > CHARACTER_SIZE) maxw = CHARACTER_SIZE - minx;
+    if (miny+maxh > CHARACTER_SIZE) maxh = CHARACTER_SIZE - miny;
+    minx = minx + maxw/2 - TILE_SIZE/2;
+    maxw = TILE_SIZE;
+
+    wizard_bbox.x = minx;
+    wizard_bbox.y = miny+maxh-maxw;
+    wizard_bbox.width = maxw;
+    wizard_bbox.height = maxw;
+    int start_x = 4;
+    int start_y = 6;
+    // for (int x=3; start_x < 0 || start_y < 0 || x<MAP_SIZE; x++)  {
+    //     for (int y=3; y<MAP_SIZE; y++)  {
+    //         if (map[MAP_LAYER_BLOCKABLE][y][x] > 0) {
+    //             start_x = x;
+    //             start_y = y;
+    //             break;
+    //         }
+    //     }
+    // }
+
+    player_pos.x = start_x*TILE_SIZE - wizard_bbox.x + (TILE_SIZE-wizard_bbox.width)/2 ;
+    player_pos.y = start_y*TILE_SIZE - wizard_bbox.y + (TILE_SIZE-wizard_bbox.height)/2;
+
+    player_direction = DIR_DOWN;
+
+    // head colors
     for (int i=0; i<riv->spritesheets[wizard_sps].cell_height; i++)  {
         if (got_colors >= HEAD_COLORS) break;
         for (int j=0; j<riv->spritesheets[wizard_sps].cell_width; j++)  {
@@ -502,33 +552,15 @@ void start_game() {
         }
     }
 
-    minx = minx + maxw/2 - TILE_SIZE/2;
-    maxw = TILE_SIZE;
-
-    wizard_bbox.x = minx;
-    wizard_bbox.y = miny+maxh-maxw;
-    wizard_bbox.width = maxw;
-    wizard_bbox.height = maxw;
-    int start_x = 4;
-    int start_y = 6;
-    // for (int x=3; start_x < 0 || start_y < 0 || x<MAP_SIZE; x++)  {
-    //     for (int y=3; y<MAP_SIZE; y++)  {
-    //         if (map[MAP_LAYER_BLOCKABLE][y][x] > 0) {
-    //             start_x = x;
-    //             start_y = y;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    player_pos.x = start_x*TILE_SIZE - wizard_bbox.x + (TILE_SIZE-wizard_bbox.width)/2 ;
-    player_pos.y = start_y*TILE_SIZE - wizard_bbox.y + (TILE_SIZE-wizard_bbox.height)/2;
-    player_direction = DIR_DOWN;
+    // spells
     last_cast_key_press_frame = 0;
     for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
 
     n_spells = sizeof(spellbook) / sizeof(spellbook[0]);
     n_frostbite_colors = sizeof(frostbite_colors) / sizeof(frostbite_colors[0]);
+
+    // chests
+    n_unlockable_objects = sizeof(unlockable_objects) / sizeof(unlockable_objects[0]);
 
     // monsters
     monster_moving_frames = (int)ceil(frames_per_beat / 4);
@@ -547,6 +579,8 @@ void start_game() {
             if (r.y < miny) miny = r.y;
             if (r.height > maxh) maxh = r.height;
         }
+        if (minx + maxw > CHARACTER_SIZE) maxw = CHARACTER_SIZE - minx;
+        if (miny+maxh > CHARACTER_SIZE) maxh = CHARACTER_SIZE - miny;
         minx = minx + maxw/2 - TILE_SIZE/2;
         maxw = TILE_SIZE;
 
@@ -570,6 +604,7 @@ void start_game() {
                     spawn_points_defined++;
                 }
             }
+            
             if (spawn_points_defined == n_monster_types) break;
         }
         if (spawn_points_defined == n_monster_types) break;
@@ -577,8 +612,7 @@ void start_game() {
 
     life_points = starting_life_points;
 
-    seqt_set_start(sound_id,4*frames_per_beat/riv->target_fps);
-    seqt_seek(sound_id,0.0);
+    seqt_set_start(sound_id,4.0*frames_per_beat/riv->target_fps);
 
     // riv_printf("START\n");
 }
@@ -636,11 +670,6 @@ void read_incard_data(uint8_t *data,int from,int size) {
 
         // music = (Music)(data + from);
 
-        // riv_printf("music magic %s\n",music->magic);
-        // riv_printf("music version %d\n",music->version);
-        // riv_printf("music flags %d\n",music->flags);
-        // riv_printf("music bpm %d\n",music->bpm);
-
     // } else if (!strcmp(magic,"SPRS")) {
 
     //     spng_ctx *ctx = spng_ctx_new(0);
@@ -680,7 +709,7 @@ void read_incard_data(uint8_t *data,int from,int size) {
 }
 
 void update_score() {
-    score = riv->frame - start_frame + kill_bonus * (monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
+    score = (10*(riv->frame - start_frame))/riv->target_fps + kill_bonus * (monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
     riv->outcard_len = riv_snprintf((char*)riv->outcard, RIV_SIZE_OUTCARD, 
         "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}",
         score,riv->frame - start_frame, life_points==0,life_points,
@@ -770,14 +799,14 @@ void play_music() {
                 seqt_note note = sound->source->pages[monster_types[m].track][note_y][get_note_x(sound_id,monster_types[m].track,note_to_evaluate)];
                 
                 if (note.periods > 0) {
-                    monster_types[monster_types[m].track].n_notes++;
+                    monster_types[m].n_notes++;
                 }
 
                 if (get_next_beat_notes) {
                     for (int ts = 0; ts < TIME_SIG; ts++) {
                         note = sound->source->pages[monster_types[m].track][note_y][get_note_x(sound_id,monster_types[m].track,note_to_evaluate + ts)];
                         if (note.periods > 0) {
-                            monster_types[monster_types[m].track].notes_next_tick++;
+                            monster_types[m].notes_next_tick++;
                         }
                     }
                 }
@@ -836,7 +865,19 @@ void update_state() {
 
     int diff_frames = riv->frame - last_beat_frame;
     bool in_synch_frame = diff_frames < synch_hit || diff_frames > frames_per_beat - synch_hit;
+    int synch_beat_frame = last_beat_frame;
+    if (diff_frames > frames_per_beat - synch_hit) synch_beat_frame = last_beat_frame + frames_per_beat;
     bool move = false;
+
+    // Add crystal
+    if (diff_frames == 0) {
+        for (int i=0;i<n_unlockable_objects;++i) {
+            // add obj
+            if (last_note_frame/TIME_SIG == unlockable_objects[i][0]) {
+                map[MAP_LAYER_ITEMS][unlockable_objects[i][2]][unlockable_objects[i][1]] = unlockable_objects[i][3]; 
+            }
+        }
+    }
 
     if (riv->keys[RIV_GAMEPAD_RIGHT].down) {
         player_direction = DIR_RIGHT;
@@ -857,32 +898,44 @@ void update_state() {
         casting = false;
     }
 
-    bool key_press = false;
-    if (in_synch_frame && 
-            (riv->keys[RIV_GAMEPAD_RIGHT].press || riv->keys[RIV_GAMEPAD_LEFT].press || 
-                riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
-        key_press = true;
+    bool change_facing = false;
+    if (riv->keys[RIV_GAMEPAD_A3].down) {
+        change_facing = true;
     }
 
+    bool reset_cast_queue = false;
+
     // reset casting if pressed out of synch
-    if (!in_synch_frame && 
+    if (!change_facing && (!in_synch_frame || synch_beat_frame == last_beat_frame_press) && 
             (riv->keys[RIV_GAMEPAD_RIGHT].press || riv->keys[RIV_GAMEPAD_LEFT].press || 
                 riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
-        chain_cast = false;
-        for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
-        completed_spell = -1;
+        reset_cast_queue = true;
         // released_spell = -1;
         riv_waveform(&error_sfx);
     }
 
     // reset casting if missed synch
     if (casting && cast_queue[0] != -1 && riv->frame > last_cast_key_press_frame + frames_per_beat + synch_hit) {
+        reset_cast_queue = true;
+    }
+
+    if (reset_cast_queue) {
         chain_cast = false;
         for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
         completed_spell = -1;
     }
 
-    if (key_press && casting && riv->frame > last_cast_key_press_frame + frames_per_beat/2) {
+    bool key_press = false;
+    if (!change_facing && in_synch_frame && synch_beat_frame > last_beat_frame_press &&
+            (riv->keys[RIV_GAMEPAD_RIGHT].press || riv->keys[RIV_GAMEPAD_LEFT].press || 
+                riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
+        key_press = true;
+        last_beat_frame_press = synch_beat_frame;
+    }
+
+    // check casting
+    // if (key_press && casting && riv->frame > last_cast_key_press_frame + frames_per_beat/2) {
+    if (key_press && casting) {
         int i=0;
         for (; i<MAX_CAST; i++) {
             if (cast_queue[i] == -1) break;
@@ -893,10 +946,11 @@ void update_state() {
             check_completed_spell();
         }
         
-        last_cast_key_press_frame = riv->frame;
+        last_cast_key_press_frame = synch_beat_frame;
     }
 
-    if (key_press && !casting && riv->frame > last_move_frame + moving_frames) {
+    // check movement
+    if (key_press && !casting) {
         int dx = 0;
         int dy = 0;
         if (player_direction == DIR_LEFT) dx = -TILE_SIZE;
@@ -914,11 +968,13 @@ void update_state() {
         }
     }
 
+    // reset spell after effect
     if (released_spell > -1 && riv->frame > release_spell_frame + release_spell_anim_frames) {
         released_spell = -1;
         check_completed_spell();
     }
 
+    // release spell
     if (!casting && riv->keys[RIV_GAMEPAD_A1].press) {
         if (completed_spell > -1) {
             released_spell = completed_spell;
@@ -938,8 +994,8 @@ void update_state() {
         for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
     }
 
-
-    if (riv->frame <= last_move_frame + moving_frames && moved_frames < TILE_SIZE) {
+    // apply movement
+    if (riv->frame < last_move_frame + moving_frames && moved_frames < TILE_SIZE) {
         int final_speed = speed;
         if (moved_frames + final_speed > TILE_SIZE)
             final_speed = TILE_SIZE - moved_frames;
@@ -960,14 +1016,20 @@ void update_state() {
                 player_pos.x+wizard_bbox.x,
                 player_pos.y+wizard_bbox.y};
             // collision with chest
-            if (collides_with_layer(player_base, MAP_LAYER_ITEMS) == 1) {
-                map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = 4; // open chest
-                // do something
-                // riv_printf("  On chest!!\n");
-                unlocked_spells[FROSTBITE2_SPELL] = true;
-                unlocked_spells[FIREBALL_SPELL] = true;
+            int16_t collided_obj = collides_with_layer(player_base, MAP_LAYER_ITEMS);
+            if (collided_obj == 1 || collided_obj == 17 || collided_obj == 30) {
+                if (collided_obj == 1) {
+                    map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = 4; // open chest
+                } else {
+                    map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = -1; // remove obj
+                }
+                unlocked_chests++;
+                for (int s=0; s<n_spells; s++) {
+                    if (chest_unlock_spell[s] == unlocked_chests)
+                        unlocked_spells[s] = true;
+                }
                 help_frame = riv->frame;
-                chest_help = true;
+                chest_help = unlocked_chests;
             }
             
             // collision with front of board
@@ -975,22 +1037,16 @@ void update_state() {
                 riv_vec2i pos_up = {
                     player_base.x,
                     player_base.y - TILE_SIZE};
-                // riv_printf("  pos %f %f %i %i\n",pos_up.y/TILE_SIZE,pos_up.x/TILE_SIZE,(int)(pos_up.y/TILE_SIZE),(int)(pos_up.x/TILE_SIZE));
                 if (collides_with_layer(pos_up, MAP_LAYER_DECORATIONS) == 2) {
-                    // do something
-                    // riv_printf("  Reading board!!\n");
                     help_frame = riv->frame;
                     board_help = true;
                 }
             }
         }
-
-        // spawn monsters
-
     }
 
     // evaluate if monsters will move and spawn
-    if (riv->frame == last_beat_frame || moved_frames == TILE_SIZE) {
+    if (diff_frames == 0 || moved_frames == TILE_SIZE) {
 
         // evaluate if monsters will move
         riv_vec2i player_base = {
@@ -1022,11 +1078,18 @@ void update_state() {
                 }
 
                 monsters[i].moving = STANDING;
-
-                int dir = DIR_UP;
-                if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
-                else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
-                else if (player_tile_y >= monster_tile_y) dir = DIR_DOWN;
+                int dir;
+                if (last_note_frame/TIME_SIG%2) {
+                    dir = DIR_UP;
+                    if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
+                    else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
+                    else if (player_tile_y >= monster_tile_y) dir = DIR_DOWN;
+                } else {
+                    dir = DIR_LEFT;
+                    if (player_tile_y < monster_tile_y) dir = DIR_UP;
+                    else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
+                    else if (player_tile_x >= monster_tile_x) dir = DIR_RIGHT;
+                }
                 
                 monsters[i].direction = dir;
                 monsters[i].delta.x = 0;
@@ -1062,13 +1125,13 @@ void update_state() {
             }
             if (monster_tile_x + dx == player_tile_x && monster_tile_y + dy == player_tile_y) {
                 if (released_spell == PROTECTION_SPELL) {
-                    // riv_printf("Monster %d attacked but wizard defended\n",i);
+                    // Monster attacked but wizard defended
                     riv_waveform(&monster_defend_sfx);
                     protection_circles--;
                     if (protection_circles == 0)
                         released_spell = -1;
                 } else {
-                    // riv_printf("Monster %d attacked\n",i);
+                    // Monster attacked
                     riv_waveform(&monster_damage_sfx);
                     life_points--;
                     if (life_points == 0) {
@@ -1092,6 +1155,7 @@ void update_state() {
                     n_monsters++;
                     // riv_printf("New monster %d spawned %d %d %d\n",i, monster_types[i].n_notes,monster_types[i].notes_to_spawn, monster_types[i].n_spawned);
                     monster_types[i].n_spawned++;
+                    monster_types[i].notes_to_spawn = monster_types[i].notes_to_spawn > spawn_decrease_interval ? monster_types[i].notes_to_spawn - spawn_decrease_interval : 1;
                 }
             }
         }
@@ -1123,7 +1187,7 @@ void update_state() {
     // check spell damage
     if (released_spell > -1 && released_spell != PROTECTION_SPELL) {
 
-        // draw spell effect
+        // spell effect area
         riv_vec2i player_base = {
             player_pos.x+wizard_bbox.x,
             player_pos.y+wizard_bbox.y};
@@ -1135,41 +1199,52 @@ void update_state() {
         int player_tile_x = player_base.x/TILE_SIZE;
         int player_tile_y = player_base.y/TILE_SIZE;
 
-        // spell range
-        for(uint8_t effect_tile = 0; effect_tile < MAX_SPELL_REACH_TILES; effect_tile++) {
-            if (!spells_effect_area[released_spell][effect_tile][0]) break;
-            int x;
-            int y;
+        for (int i=0;i<n_monsters;++i) {
+            if (monsters[i].life_points == 0) continue;
+            riv_vec2i monster_base = {
+                monsters[i].pos.x+monsters[i].type->bbox.x,
+                monsters[i].pos.y+monsters[i].type->bbox.y};
+            int monster_tile_x = monster_base.x/TILE_SIZE;
+            int monster_tile_y = monster_base.y/TILE_SIZE;
 
-            if (release_spell_direction == DIR_DOWN) {
-                x = spells_effect_area[released_spell][effect_tile][2];
-                y = spells_effect_area[released_spell][effect_tile][1];
-            } else if (release_spell_direction == DIR_LEFT) {
-                x = -spells_effect_area[released_spell][effect_tile][1];
-                y = spells_effect_area[released_spell][effect_tile][2];
-            } else if (release_spell_direction == DIR_UP) {
-                x = spells_effect_area[released_spell][effect_tile][2];
-                y = -spells_effect_area[released_spell][effect_tile][1];
-            } else if (release_spell_direction == DIR_RIGHT) {
-                x = spells_effect_area[released_spell][effect_tile][1];
-                y = spells_effect_area[released_spell][effect_tile][2];
-            }
+            // if secret (all)
+            if (released_spell == SECRET_SPELL) {
+                riv_waveform(&monster_hit_sfx);
+                // Hit monster
+                monsters[i].life_points--;
+                if (monsters[i].life_points == 0) {
+                    // Killed monster
+                    monsters[i].type->n_killed++;
+                }
+            } else {
+                // spell range
+                for(uint8_t effect_tile = 0; effect_tile < MAX_SPELL_REACH_TILES; effect_tile++) {
+                    if (!spells_effect_area[released_spell][effect_tile][0]) break;
+                    int x;
+                    int y;
 
-            for (int i=0;i<n_monsters;++i) {
-                if (monsters[i].life_points == 0) continue;
-                riv_vec2i monster_base = {
-                    monsters[i].pos.x+monsters[i].type->bbox.x,
-                    monsters[i].pos.y+monsters[i].type->bbox.y};
-                int monster_tile_x = monster_base.x/TILE_SIZE;
-                int monster_tile_y = monster_base.y/TILE_SIZE;
+                    if (release_spell_direction == DIR_DOWN) {
+                        x = spells_effect_area[released_spell][effect_tile][2];
+                        y = spells_effect_area[released_spell][effect_tile][1];
+                    } else if (release_spell_direction == DIR_LEFT) {
+                        x = -spells_effect_area[released_spell][effect_tile][1];
+                        y = spells_effect_area[released_spell][effect_tile][2];
+                    } else if (release_spell_direction == DIR_UP) {
+                        x = spells_effect_area[released_spell][effect_tile][2];
+                        y = -spells_effect_area[released_spell][effect_tile][1];
+                    } else if (release_spell_direction == DIR_RIGHT) {
+                        x = spells_effect_area[released_spell][effect_tile][1];
+                        y = spells_effect_area[released_spell][effect_tile][2];
+                    }
 
-                if (release_spell_tile_x + x == monster_tile_x && release_spell_tile_y + y == monster_tile_y) {
-                    riv_waveform(&monster_hit_sfx);
-                    monsters[i].life_points--;
-                    // riv_printf("Hit monster %d lp %d",i,monsters[i].life_points);
-                    if (monsters[i].life_points == 0) {
-                        monsters[i].type->n_killed++;
-                        // riv_printf("Killed monster %d",i);
+                    if (release_spell_tile_x + x == monster_tile_x && release_spell_tile_y + y == monster_tile_y) {
+                        riv_waveform(&monster_hit_sfx);
+                        // Hit monster
+                        monsters[i].life_points--;
+                        if (monsters[i].life_points == 0) {
+                            // Killed monster
+                            monsters[i].type->n_killed++;
+                        }
                     }
                 }
             }
@@ -1204,8 +1279,12 @@ void draw_beat_guide() {
 
     riv_draw_rect_fill(0,SCREEN_SIZE - TILE_SIZE, SCREEN_SIZE, 2, RIV_COLOR_SLATE);
 
-    for (int i=0; i<BEAT_TICKS; i++)  {
-        riv_draw_rect_fill(SCREEN_SIZE - delta_x - i * SCREEN_SIZE/6,SCREEN_SIZE - 1.5 * TILE_SIZE, 2, TILE_SIZE, RIV_COLOR_SLATE);
+    for (int i=0; i<BEAT_TICKS/2; i++)  {
+        riv_draw_rect_fill(SCREEN_SIZE - delta_x - i * SCREEN_SIZE/BEAT_TICKS,SCREEN_SIZE - 1.5 * TILE_SIZE, 2, TILE_SIZE, RIV_COLOR_SLATE);
+    }
+
+    for (int i=0; i<BEAT_TICKS/2; i++)  {
+        riv_draw_rect_fill(delta_x + i * SCREEN_SIZE/BEAT_TICKS,SCREEN_SIZE - 1.5 * TILE_SIZE, 2, TILE_SIZE, RIV_COLOR_SLATE);
     }
 
     riv_draw_rect_fill(SCREEN_SIZE/2 - TILE_SIZE/2 + dx/2,SCREEN_SIZE - 1.5 * TILE_SIZE, TILE_SIZE - dx, TILE_SIZE, RIV_COLOR_SLATE);
@@ -1229,7 +1308,6 @@ void draw_cast_moves() {
 
 void draw_spell() {
 
-    //riv_draw_rect_line(player_pos.x+wizard_bbox.x,player_pos.y+wizard_bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_YELLOW);
     if (released_spell > -1 && riv->frame <= release_spell_frame + release_spell_anim_frames) {
 
         // draw spell effect
@@ -1241,27 +1319,29 @@ void draw_spell() {
         int release_spell_tile_x = release_spell_x/TILE_SIZE;
         int release_spell_tile_y = release_spell_y/TILE_SIZE;
 
-        // // draw effect range
-        // for(uint8_t effect_tile = 0; effect_tile < MAX_SPELL_REACH_TILES; effect_tile++) {
-        //     if (!spells_effect_area[released_spell][effect_tile][0]) break;
-        //     int x;
-        //     int y;
+        // draw effect range
+        if (display_grid_lines) {
+            for(uint8_t effect_tile = 0; effect_tile < MAX_SPELL_REACH_TILES; effect_tile++) {
+                if (!spells_effect_area[released_spell][effect_tile][0]) break;
+                int x;
+                int y;
 
-        //     if (release_spell_direction == DIR_DOWN) {
-        //         x = spells_effect_area[released_spell][effect_tile][2];
-        //         y = spells_effect_area[released_spell][effect_tile][1];
-        //     } else if (release_spell_direction == DIR_LEFT) {
-        //         x = -spells_effect_area[released_spell][effect_tile][1];
-        //         y = spells_effect_area[released_spell][effect_tile][2];
-        //     } else if (release_spell_direction == DIR_UP) {
-        //         x = spells_effect_area[released_spell][effect_tile][2];
-        //         y = -spells_effect_area[released_spell][effect_tile][1];
-        //     } else if (release_spell_direction == DIR_RIGHT) {
-        //         x = spells_effect_area[released_spell][effect_tile][1];
-        //         y = spells_effect_area[released_spell][effect_tile][2];
-        //     }
-        //     riv_draw_rect_line(release_spell_tile_x*TILE_SIZE+x*TILE_SIZE,release_spell_tile_y*TILE_SIZE+y*TILE_SIZE,TILE_SIZE,TILE_SIZE,RIV_COLOR_YELLOW);
-        // }
+                if (release_spell_direction == DIR_DOWN) {
+                    x = spells_effect_area[released_spell][effect_tile][2];
+                    y = spells_effect_area[released_spell][effect_tile][1];
+                } else if (release_spell_direction == DIR_LEFT) {
+                    x = -spells_effect_area[released_spell][effect_tile][1];
+                    y = spells_effect_area[released_spell][effect_tile][2];
+                } else if (release_spell_direction == DIR_UP) {
+                    x = spells_effect_area[released_spell][effect_tile][2];
+                    y = -spells_effect_area[released_spell][effect_tile][1];
+                } else if (release_spell_direction == DIR_RIGHT) {
+                    x = spells_effect_area[released_spell][effect_tile][1];
+                    y = spells_effect_area[released_spell][effect_tile][2];
+                }
+                riv_draw_rect_line(release_spell_tile_x*TILE_SIZE+x*TILE_SIZE,release_spell_tile_y*TILE_SIZE+y*TILE_SIZE,TILE_SIZE,TILE_SIZE,RIV_COLOR_YELLOW);
+            }
+        }
 
         // char buf[128];
         if (released_spell == FROSTBITE1_SPELL || released_spell == FROSTBITE2_SPELL || released_spell == FROSTBITE3_SPELL ) {
@@ -1467,17 +1547,6 @@ void draw_spell() {
             }
             else if (curr_anim_frames%((int)(frames_per_beat+frames_per_beat/2)) == 0) riv_clear(RIV_COLOR_WHITE);
         }
-
-        // if (player_direction == DIR_DOWN) {
-        //     riv_draw_text(buf, RIV_SPRITESHEET_FONT_5X7, RIV_TOP, player_pos.x+wizard_bbox.x+wizard_bbox.width/2,player_pos.y+wizard_bbox.y+wizard_bbox.height+1, 1, RIV_COLOR_WHITE);
-        // } else if (player_direction == DIR_LEFT) {
-        //     riv_draw_text(buf, RIV_SPRITESHEET_FONT_5X7, RIV_RIGHT, player_pos.x+wizard_bbox.x-1,player_pos.y+wizard_bbox.y+wizard_bbox.height/2, 1, RIV_COLOR_WHITE);
-        // } else if (player_direction == DIR_UP) {
-        //     riv_draw_text(buf, RIV_SPRITESHEET_FONT_5X7, RIV_BOTTOM, player_pos.x+wizard_bbox.x+wizard_bbox.width/2,player_pos.y+wizard_bbox.y-1, 1, RIV_COLOR_WHITE);
-        // } else if (player_direction == DIR_RIGHT) {
-        //     riv_draw_text(buf, RIV_SPRITESHEET_FONT_5X7, RIV_LEFT, player_pos.x+wizard_bbox.x+wizard_bbox.width+1,player_pos.y+wizard_bbox.y+wizard_bbox.height/2, 1, RIV_COLOR_WHITE);
-        // }
-
     }
 
     if (completed_spell > -1) {
@@ -1519,6 +1588,12 @@ void draw_map() {
                 }
             }
         }
+    }if (display_grid_lines) {
+        for (int y=0;y<MAP_SIZE;++y) {
+            for (int x=0;x<MAP_SIZE;++x) {
+                riv_draw_rect_line(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE, RIV_COLOR_DARKSLATE);
+            }
+        }
     }
 }
 
@@ -1533,7 +1608,8 @@ void draw_player() {
     int base_frame = player_direction * CHARACTER_ANIM_FRAMES;
     int anim_frame = ((riv->frame / ((int)frames_per_beat/TIME_SIG)) % CHARACTER_ANIM_FRAMES);
     riv_draw_sprite(base_frame + anim_frame, wizard_sps, player_pos.x, player_pos.y, 1, 1, 1, 1);
-    // riv_draw_rect_line(player_pos.x+wizard_bbox.x,player_pos.y+wizard_bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_PEACH);
+    if (display_grid_lines) 
+        riv_draw_rect_line(player_pos.x+wizard_bbox.x,player_pos.y+wizard_bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_PEACH);
     if (chain_cast) { // Reset color palette swap
         for (int c=0; c<HEAD_COLORS; c++) {
             riv->draw.pal[head_colors[c]] = head_colors[c];
@@ -1554,7 +1630,8 @@ void draw_monsters() {
 
         riv_draw_sprite(base_frame + anim_frame, monsters[i].type->ssid, 
             monsters[i].pos.x + monsters[i].delta.x, monsters[i].pos.y + monsters[i].delta.y, 1, 1, 1, 1);
-        // riv_draw_rect_line(monsters[i].pos.x+monsters[i].type->bbox.x,monsters[i].pos.y+monsters[i].type->bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_LIGHTRED);
+        if (display_grid_lines) 
+            riv_draw_rect_line(monsters[i].pos.x+monsters[i].type->bbox.x,monsters[i].pos.y+monsters[i].type->bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_LIGHTRED);
     }
 }
 
@@ -1563,6 +1640,7 @@ void draw_help() {
     if (board_help) {
         if (riv->frame < help_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
             char buf[128];
+            // TODO: dynamically generate help based on curremt unlocked
             riv_snprintf(buf, sizeof(buf), "Frostbite: %c %c.\nShield of light: %c %c",2,2,2,3);
             riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_TOP, SCREEN_SIZE/2,TILE_SIZE/2 + 2, 2, RIV_COLOR_WHITE);
         } else {
@@ -1571,10 +1649,24 @@ void draw_help() {
     } else if (chest_help) {
         if (riv->frame < help_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
             char buf[128];
-            riv_snprintf(buf, sizeof(buf), "Frostbite 2: %c %c %c\nFireball: %c %c %c %c",2,2,2,2,2,1,1);
+            // TODO: dynamically generate help
+            switch (chest_help) {
+            case 1:
+                riv_snprintf(buf, sizeof(buf), "Frostbite 2: %c %c %c\nFireball: %c %c %c %c",2,2,2,2,2,1,1);
+                break;
+            case 2:
+                riv_snprintf(buf, sizeof(buf), "Frostbite 3: %c %c %c %c\nWindslash: %c %c %c",2,2,2,2,2,1,2);
+                break;
+            case 3:
+                riv_snprintf(buf, sizeof(buf), "Nova: %c %c %c %c",2,4,1,3);
+                break;
+            case 4:
+                riv_snprintf(buf, sizeof(buf), "Secret: %c %c %c %c %c %c %c %c",2,1,2,1,4,4,3,3);
+                break;
+            }
             riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_TOP, SCREEN_SIZE/2,TILE_SIZE/2 + 2, 2, RIV_COLOR_WHITE);
         } else {
-            chest_help = false;
+            chest_help = 0;
         }
     } else if (riv->frame < start_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
         riv_draw_text("Move on the Rhythm. Cast on the rhythm.", RIV_SPRITESHEET_FONT_3X5, RIV_TOP, SCREEN_SIZE/2,TILE_SIZE/2 + 2, 2, RIV_COLOR_WHITE);
@@ -1622,8 +1714,8 @@ void draw() {
     } else if (!ended) { 
         riv_clear(RIV_COLOR_DARKSLATE);
         draw_map();
-        draw_player();
         draw_monsters();
+        draw_player();
         draw_cast_moves();
         draw_beat_guide();
         draw_help();
