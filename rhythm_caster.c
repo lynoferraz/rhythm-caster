@@ -47,6 +47,8 @@ enum {
 
     MAX_MONSTER_TYPES = 4,
     MAX_MONSTERS = 4096,
+    MAX_UNLOCKABLE_ITEMS = 8,
+    MAX_ITEM_POSITIONS = 4,
 };
 
 enum {
@@ -200,11 +202,11 @@ static int16_t map[MAP_LAYERS][MAP_SIZE][MAP_SIZE] = {
         {234,-1,-1,-1,-1,-1,-1,6,-1,-1,-1,-1,-1,-1,-1,243,},
         {234,-1,-1,-1,-1,-1,-1,19,-1,-1,-1,-1,0,-1,-1,243,},
         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,14,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,5,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,6,-1,243,},
-        {234,-1,-1,6,-1,-1,-1,-1,-1,-1,-1,-1,-1,19,-1,243,},
+        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+        {234,-1,-1,6,-1,-1,-1,-1,5,-1,-1,-1,14,-1,-1,243,},
         {234,-1,-1,19,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
         {234,-1,-1,-1,-1,-1,27,-1,-1,-1,-1,-1,-1,-1,-1,243,},
         {247,248,249,250,-1,-1,-1,-1,-1,-1,-1,-1,253,254,255,256,},
         {-1,-1,-1,263,265,264,265,265,265,265,265,265,266,-1,-1,-1,},
@@ -229,8 +231,8 @@ static int16_t map[MAP_LAYERS][MAP_SIZE][MAP_SIZE] = {
     },
     {
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,40,-1,2,-1,-1,-1,-1,-1,-1,-1,-1,45,40,-1,-1,},
+        {-1,-1,-1,-1,-1,2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+        {-1,40,-1,32,-1,-1,-1,-1,-1,-1,-1,-1,45,40,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
@@ -326,26 +328,16 @@ static float spell_beats_duration[] = {
 };
 
 static bool unlocked_spells[] = {
-    true, //FROSTBITE1_SPELL,
+    false, //FROSTBITE1_SPELL,
     false, //FROSTBITE2_SPELL,
     false, //FROSTBITE3_SPELL,
     false, //FIREBALL_SPELL,
     false, //WINDSLASH_SPELL,
     false, //NOVA_SPELL,
-    true, //PROTECTION_SPELL,
+    false, //PROTECTION_SPELL,
     false, //SECRET_SPELL,
 };
 
-static int16_t chest_unlock_spell[] = {
-    0, //FROSTBITE1_SPELL,
-    1, //FROSTBITE2_SPELL,
-    2, //FROSTBITE3_SPELL,
-    1, //FIREBALL_SPELL,
-    2, //WINDSLASH_SPELL,
-    3, //NOVA_SPELL,
-    0, //PROTECTION_SPELL,
-    4, //SECRET_SPELL,
-};
 static int frostbite_colors[] = {
     RIV_COLOR_WHITE,RIV_COLOR_LIGHTGREY, RIV_COLOR_LIGHTSLATE, RIV_COLOR_LIGHTBLUE,RIV_COLOR_LIGHTTEAL,RIV_COLOR_WHITE,RIV_COLOR_LIGHTGREY
 };
@@ -426,7 +418,7 @@ int release_spell_frame = 0;
 int release_spell_anim_frames = 0;
 riv_vec2i release_spell_pos;
 int release_spell_direction;
-int n_spells;
+int n_spells = sizeof(spellbook) / sizeof(spellbook[0]);
 int n_frostbite_colors;
 int last_move_frame = 0;
 int last_move_dir = 0;
@@ -444,33 +436,57 @@ int n_monster_types = 0;
 int n_monsters = 0;
 int monster_speed;
 int monster_moving_frames;
+static int monster_ssids[MAX_MONSTER_TYPES];
 
+// items
 bool board_help;
-int chest_help;
-int unlocked_chests;
+int item_help;
+int collected_items = 0;
 int help_frame;
+uint8_t n_unlockable_objects;
+int item_id_to_add = 30; //17
+int last_item_add_beat;
 
 // config
 float synch_factor = 0.3;
 int starting_life_points = 10;
-int kill_bonus = 500;
+int time_bonus = 1;
+int kill_bonus = 50;
+int item_bonus = 2000;
 static int monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
 static int monster_notes_to_move[MAX_MONSTER_TYPES] = {3,3,3,3};
 static int monster_damage[MAX_MONSTER_TYPES] = {1,1,1,1};
 static int monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
 static int monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
-static int monster_ssids[MAX_MONSTER_TYPES];
 static int monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
 int spawn_decrease_interval = 5;
 bool display_grid_lines = false;
+bool display_initial_help = true;
 
-uint8_t n_unlockable_objects;
-static int unlockable_objects[][4] = { // beat_frame,x,y,obj
-    {0,13,12,1},
-    {80,14,4,1},
-    {200,7,9,17},
-    {500,6,14,30}
+static int unlockable_objects[MAX_UNLOCKABLE_ITEMS][5] = { // active,beat_frame,x,y,obj
+    {1,0,13,12,1},
+    {1,80,14,4,1},
+    {1,200,7,9,1},
+    {1,500,6,14,13},
 }; 
+
+int item_interval = 40;
+static int item_positions[MAX_ITEM_POSITIONS][2] = { // active,beat_frame,x,y,obj
+    {12,13},
+    {12,5},
+    {5,6},
+    {4,13}
+}; 
+static int16_t item_unlock_spell[] = {
+    0, //FROSTBITE1_SPELL,
+    1, //FROSTBITE2_SPELL,
+    2, //FROSTBITE3_SPELL,
+    1, //FIREBALL_SPELL,
+    2, //WINDSLASH_SPELL,
+    3, //NOVA_SPELL,
+    0, //PROTECTION_SPELL,
+    4, //SECRET_SPELL,
+};
 
 ////
 // Aux functions
@@ -556,11 +572,20 @@ void start_game() {
     last_cast_key_press_frame = 0;
     for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
 
-    n_spells = sizeof(spellbook) / sizeof(spellbook[0]);
     n_frostbite_colors = sizeof(frostbite_colors) / sizeof(frostbite_colors[0]);
 
-    // chests
-    n_unlockable_objects = sizeof(unlockable_objects) / sizeof(unlockable_objects[0]);
+    // items
+    int total_unlockable_objects = sizeof(unlockable_objects) / sizeof(unlockable_objects[0]);
+    n_unlockable_objects = 0;
+    for (int i=0;i<total_unlockable_objects;++i) {
+        if (unlockable_objects[i][0] != 0) {
+            n_unlockable_objects++;
+        }
+    }
+    for (int s=0; s<n_spells; s++) {
+        if (item_unlock_spell[s] == collected_items)
+            unlocked_spells[s] = true;
+    }
 
     // monsters
     monster_moving_frames = (int)ceil(frames_per_beat / 4);
@@ -709,10 +734,11 @@ void read_incard_data(uint8_t *data,int from,int size) {
 }
 
 void update_score() {
-    score = (10*(riv->frame - start_frame))/riv->target_fps + kill_bonus * (monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
+    uint64_t frame = riv->frame - start_frame;
+    score = (time_bonus*frame)/riv->target_fps + item_bonus*collected_items +  kill_bonus*(monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
     riv->outcard_len = riv_snprintf((char*)riv->outcard, RIV_SIZE_OUTCARD, 
-        "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}",
-        score,riv->frame - start_frame, life_points==0,life_points,
+        "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"collected_items\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}",
+        score,frame, life_points==0,life_points,collected_items,
         monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed
     );
 
@@ -871,11 +897,19 @@ void update_state() {
 
     // Add crystal
     if (diff_frames == 0) {
-        for (int i=0;i<n_unlockable_objects;++i) {
-            // add obj
-            if (last_note_frame/TIME_SIG == unlockable_objects[i][0]) {
-                map[MAP_LAYER_ITEMS][unlockable_objects[i][2]][unlockable_objects[i][1]] = unlockable_objects[i][3]; 
+        int beat = last_note_frame/TIME_SIG;
+        if (collected_items < n_unlockable_objects) {
+            for (int i=0;i<n_unlockable_objects;++i) {
+                // add obj
+                if (beat == unlockable_objects[i][1]) {
+                    map[MAP_LAYER_ITEMS][unlockable_objects[i][3]][unlockable_objects[i][2]] = unlockable_objects[i][4];
+                    last_item_add_beat = beat;
+                }
             }
+        } else if (beat > last_item_add_beat + item_interval) {
+            uint64_t i = riv_rand_uint(MAX_ITEM_POSITIONS);
+            map[MAP_LAYER_ITEMS][item_positions[i][1]][item_positions[i][0]] = item_id_to_add;
+            last_item_add_beat = beat;
         }
     }
 
@@ -1015,21 +1049,26 @@ void update_state() {
             riv_vec2i player_base = {
                 player_pos.x+wizard_bbox.x,
                 player_pos.y+wizard_bbox.y};
-            // collision with chest
+            // collision with item
             int16_t collided_obj = collides_with_layer(player_base, MAP_LAYER_ITEMS);
-            if (collided_obj == 1 || collided_obj == 17 || collided_obj == 30) {
+            if (collided_obj == 1 || collided_obj == 13 || collided_obj == 17 || collided_obj == 30) {
                 if (collided_obj == 1) {
                     map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = 4; // open chest
                 } else {
                     map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = -1; // remove obj
                 }
-                unlocked_chests++;
+                collected_items++;
+                bool new_spells = false;
                 for (int s=0; s<n_spells; s++) {
-                    if (chest_unlock_spell[s] == unlocked_chests)
+                    if (item_unlock_spell[s] == collected_items) {
                         unlocked_spells[s] = true;
+                        new_spells = true;
+                    }
                 }
-                help_frame = riv->frame;
-                chest_help = unlocked_chests;
+                if (new_spells) {
+                    help_frame = riv->frame;
+                    item_help = collected_items;
+                }
             }
             
             // collision with front of board
@@ -1079,16 +1118,27 @@ void update_state() {
 
                 monsters[i].moving = STANDING;
                 int dir;
-                if (last_note_frame/TIME_SIG%2) {
+                uint32_t route = last_note_frame/TIME_SIG%4;
+                if (route == 0) {
                     dir = DIR_UP;
                     if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
                     else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
                     else if (player_tile_y >= monster_tile_y) dir = DIR_DOWN;
-                } else {
+                } else if (route == 1) {
                     dir = DIR_LEFT;
                     if (player_tile_y < monster_tile_y) dir = DIR_UP;
                     else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
                     else if (player_tile_x >= monster_tile_x) dir = DIR_RIGHT;
+                } else if (route == 2) {
+                    dir = DIR_DOWN;
+                    if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
+                    else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
+                    else if (player_tile_y <= monster_tile_y) dir = DIR_UP;
+                } else {
+                    dir = DIR_RIGHT;
+                    if (player_tile_y < monster_tile_y) dir = DIR_UP;
+                    else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
+                    else if (player_tile_x <= monster_tile_x) dir = DIR_LEFT;
                 }
                 
                 monsters[i].direction = dir;
@@ -1635,40 +1685,67 @@ void draw_monsters() {
     }
 }
 
-void draw_help() {
+void draw_spell_recipe(uint8_t spell, uint32_t pos, uint32_t x, uint32_t y, uint32_t size, uint32_t color) {
+    char buf[128];
+    bool draw = true;
+    switch (spell) {
+    case PROTECTION_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Shield of light: %c %c",2,3);
+        break;
+    case FROSTBITE1_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Frostbite: %c %c",2,2);
+        break;
+    case FROSTBITE2_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Frostbite 2: %c %c %c",2,2,2);
+        break;
+    case FROSTBITE3_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Frostbite 3: %c %c %c %c",2,2,2,2);
+        break;
+    case WINDSLASH_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Windslash: %c %c %c",2,1,2);
+        break;
+    case FIREBALL_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Fireball: %c %c %c %c",2,2,1,1);
+        break;
+    case NOVA_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Nova: %c %c %c %c",2,4,1,3);
+        break;
+    case SECRET_SPELL:
+        riv_snprintf(buf, sizeof(buf), "Secret: %c %c %c %c %c %c %c %c",2,1,2,1,4,4,3,3);
+        break;
+    default:
+        draw = false;
+    }
+    if (draw)
+        riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, pos, x, y, size, color);
+}
 
+void draw_help() {
     if (board_help) {
         if (riv->frame < help_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
-            char buf[128];
-            // TODO: dynamically generate help based on curremt unlocked
-            riv_snprintf(buf, sizeof(buf), "Frostbite: %c %c.\nShield of light: %c %c",2,2,2,3);
-            riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_TOP, SCREEN_SIZE/2,TILE_SIZE/2 + 2, 2, RIV_COLOR_WHITE);
+            uint32_t top = TILE_SIZE/2 + 2;
+            for (int s=0; s<n_spells; s++) {
+                if (unlocked_spells[s]) {
+                    draw_spell_recipe(s, RIV_TOP, SCREEN_SIZE/2,top, 2, RIV_COLOR_WHITE);
+                    top += TILE_SIZE/2;
+                }
+            }
         } else {
             board_help = false;
         }
-    } else if (chest_help) {
+    } else if (item_help) {
         if (riv->frame < help_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
-            char buf[128];
-            // TODO: dynamically generate help
-            switch (chest_help) {
-            case 1:
-                riv_snprintf(buf, sizeof(buf), "Frostbite 2: %c %c %c\nFireball: %c %c %c %c",2,2,2,2,2,1,1);
-                break;
-            case 2:
-                riv_snprintf(buf, sizeof(buf), "Frostbite 3: %c %c %c %c\nWindslash: %c %c %c",2,2,2,2,2,1,2);
-                break;
-            case 3:
-                riv_snprintf(buf, sizeof(buf), "Nova: %c %c %c %c",2,4,1,3);
-                break;
-            case 4:
-                riv_snprintf(buf, sizeof(buf), "Secret: %c %c %c %c %c %c %c %c",2,1,2,1,4,4,3,3);
-                break;
+            uint32_t top = TILE_SIZE/2 + 2;
+            for (int s=0; s<n_spells; s++) {
+                if (item_unlock_spell[s] == collected_items) {
+                    draw_spell_recipe(s, RIV_TOP, SCREEN_SIZE/2,top, 2, RIV_COLOR_WHITE);
+                    top += TILE_SIZE/2;
+                }
             }
-            riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_TOP, SCREEN_SIZE/2,TILE_SIZE/2 + 2, 2, RIV_COLOR_WHITE);
         } else {
-            chest_help = 0;
+            item_help = 0;
         }
-    } else if (riv->frame < start_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
+    } else if (display_initial_help && riv->frame < start_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
         riv_draw_text("Move on the Rhythm. Cast on the rhythm.", RIV_SPRITESHEET_FONT_3X5, RIV_TOP, SCREEN_SIZE/2,TILE_SIZE/2 + 2, 2, RIV_COLOR_WHITE);
         riv_draw_text("Uhmm... there's something writen on the board.", RIV_SPRITESHEET_FONT_3X5, RIV_BOTTOM, SCREEN_SIZE/2,SCREEN_SIZE - 2*TILE_SIZE, 2, RIV_COLOR_WHITE);
     }
@@ -1730,9 +1807,104 @@ void draw() {
 // Main loop
 
 int main(int argc, char* argv[]) {
+    uint32_t fps = 30;
+
+    if (argc > 1) {
+        if (argc % 2 == 0) {
+            riv_printf("Wrong number of arguments\n");
+            return 1;
+        }
+
+        char *delim = ","; 
+        for (int i = 1; i < argc; i+=2) {
+            if (strcmp(argv[i], "-fps") == 0) {
+                fps = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-synch-factor") == 0) {
+                synch_factor = strtof(argv[i+1], NULL);
+            } else if (strcmp(argv[i], "-starting-life") == 0) {
+                starting_life_points = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-time-bonus") == 0) {
+                time_bonus = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-kill-bonus") == 0) {
+                kill_bonus = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-item-bonus") == 0) {
+                item_bonus = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-spawn-decrease-interval") == 0) {
+                spawn_decrease_interval = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-display-grid-lines") == 0) {
+                display_grid_lines = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-display-initial-help") == 0) {
+                display_initial_help = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-monster-notes-to-spawn") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    monster_notes_to_spawn[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-monster-notes-to-move") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    monster_notes_to_move[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-monster-damage") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    monster_damage[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-monster-initial-life-points") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    monster_initial_life_points[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-monster-spawn-object") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    monster_spawn_object[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-monster-tracks") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    monster_tracks[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-item-unlock-spell") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < n_spells; t++) {
+                    item_unlock_spell[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-unlockable-objects") == 0) {
+                for (int i=0;i<MAX_UNLOCKABLE_ITEMS;++i) {
+                    unlockable_objects[i][0] = 0;
+                }
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
+                    int r = t/5;
+                    int c = t%5;
+                    unlockable_objects[r][c] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-item-interval") == 0) {
+                item_interval = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-item-positions") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_ITEM_POSITIONS; t++) {
+                    int r = t/2;
+                    int c = t%2;
+                    item_positions[r][c] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            }
+        }
+    }
+
     riv->width = SCREEN_SIZE;
     riv->height = SCREEN_SIZE;
-    riv->target_fps = 30;
+    riv->target_fps = fps;
 
     initialize();
 
