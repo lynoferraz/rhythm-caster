@@ -4,14 +4,14 @@ A dungeon crawler rhythm game
 
 ## Description
 
-Can you keep up the beat and cast spells in synch with the music?
+Can you keep up the beat and cast spells in sync with the music?
 
-In Rhythm Spell Caster you are a socerer that can only move on the music beat, and also can only cast spells by doing the enchant at the beat.
+In Rhythm Spell Caster you are a sorcerer that can only move on the music beat, and also can only cast spells by doing the chant in sync with the beat.
 
 Game controls:
 
-- Press ARROWS to move the character.
-- Hold X/A2 to start casting a spell.
+- Press ARROWS to move, and cast spells (while X/A2 is pressed). It should always be on rhythm.
+- Hold X/A2 to cast spells.
 - Press Z/A1 to release the casted spell.
 
 ## Game Parameters/Arguments

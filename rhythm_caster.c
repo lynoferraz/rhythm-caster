@@ -12,10 +12,10 @@ enum {
     MAX_MESSAGE_SIZE = 50,
     MAGIC_SIZE = 4,
     MAP_SIZE = 16,
-    // TARGET_FPS = 30,
+    TARGET_FPS = 30,
     TILE_SIZE = 24,
     CHARACTER_SIZE = 50,
-    CHARACTER_ANIM_FRAMES = 4,
+    CHARACTER_ANIM_SPRITES = 4,
     SCREEN_SIZE = TILE_SIZE*MAP_SIZE,
     CASTING_TOP_Y = TILE_SIZE*14+2,
     POSSIBLE_CAST_Y = TILE_SIZE*13,
@@ -144,8 +144,8 @@ riv_waveform_desc monster_defend_sfx = {
 
 typedef struct MonsterType {
     uint64_t ssid;
+    riv_vec2i spawn_point;
     riv_recti bbox;
-    uint8_t track;
     uint32_t n_notes;
     uint32_t notes_to_spawn;
     uint32_t n_spawned;
@@ -153,19 +153,20 @@ typedef struct MonsterType {
     uint32_t damage;
     uint32_t notes_to_move;
     uint32_t notes_next_tick;
-    uint32_t spawn_object;
-    riv_vec2i spawn_point;
-    uint8_t initial_life_points;
+    int16_t spawn_object;
+    int16_t initial_life_points;
+    uint8_t track;
 } MonsterType;
 
 typedef struct Monster {
     MonsterType *type;
     riv_vec2i pos;
     riv_vec2i delta;
+    riv_vec2i rnd;
+    int16_t life_points;
     uint8_t status;
     uint8_t moving;
     uint8_t direction;
-    uint8_t life_points;
 } Monster;
 
 ////
@@ -307,35 +308,13 @@ static int16_t spellbook[][MAX_CAST+1] = {
     {DIR_LEFT,DIR_LEFT,DIR_RIGHT,DIR_RIGHT,-1,-2,-2,-2,FIREBALL_SPELL},
     {DIR_UP,DIR_UP,DIR_DOWN,DIR_DOWN,-1,-2,-2,-2,FIREBALL_SPELL},
     {DIR_DOWN,DIR_DOWN,DIR_UP,DIR_UP,-1,-2,-2,-2,FIREBALL_SPELL},
-    {DIR_UP,DIR_DOWN,DIR_UP,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
-    {DIR_RIGHT,DIR_LEFT,DIR_RIGHT,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
-    {DIR_LEFT,DIR_RIGHT,DIR_LEFT,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
-    {DIR_DOWN,DIR_UP,DIR_DOWN,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
+    {DIR_UP,DIR_DOWN,DIR_DOWN,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
+    {DIR_RIGHT,DIR_LEFT,DIR_LEFT,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
+    {DIR_LEFT,DIR_RIGHT,DIR_RIGHT,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
+    {DIR_DOWN,DIR_UP,DIR_UP,-1,-2,-2,-2,-2,WINDSLASH_SPELL},
     {DIR_LEFT,DIR_DOWN,DIR_RIGHT,DIR_UP,-1,-2,-2,-2,NOVA_SPELL},
     {DIR_RIGHT,DIR_DOWN,DIR_LEFT,DIR_UP,-1,-2,-2,-2,NOVA_SPELL},
     {DIR_LEFT,DIR_RIGHT,DIR_LEFT,DIR_RIGHT,DIR_DOWN,DIR_DOWN,DIR_UP,DIR_UP,SECRET_SPELL},
-};
-
-static float spell_beats_duration[] = {
-    2.0, //FROSTBITE1_SPELL,
-    3.0, //FROSTBITE2_SPELL,
-    4.0, //FROSTBITE3_SPELL,
-    1.0, //FIREBALL_SPELL,
-    0.75, //WINDSLASH_SPELL,
-    4.0, //NOVA_SPELL,
-    8.0, //PROTECTION_SPELL,
-    5.0, //SECRET_SPELL,
-};
-
-static bool unlocked_spells[] = {
-    false, //FROSTBITE1_SPELL,
-    false, //FROSTBITE2_SPELL,
-    false, //FROSTBITE3_SPELL,
-    false, //FIREBALL_SPELL,
-    false, //WINDSLASH_SPELL,
-    false, //NOVA_SPELL,
-    false, //PROTECTION_SPELL,
-    false, //SECRET_SPELL,
 };
 
 static int frostbite_colors[] = {
@@ -344,19 +323,19 @@ static int frostbite_colors[] = {
 
 static int spells_effect_area[][MAX_SPELL_REACH_TILES][3] = { // model {active,facing_axis,side_axis}
     { // ATTACK_SPELL - frost 1
-        {1,1,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
+        {1,0,0},{1,1,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // ATTACK_SPELL - frost 2
-        {1,1,0},{1,2,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
+        {1,0,0},{1,1,0},{1,2,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // ATTACK_SPELL - frost 3
-        {1,1,0},{1,2,0},{1,3,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
+        {1,0,0},{1,1,0},{1,2,0},{1,3,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // FIREBALL_SPELL - fireball
-        {1,1,0},{1,2,0},{1,3,0},{1,4,0},{1,5,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
+        {1,0,0},{1,1,0},{1,2,0},{1,3,0},{1,4,0},{1,5,0},{1,1,1},{1,1,-1},{1,2,1},{1,2,-1},{1,3,1},{1,3,-1},{1,4,1},{1,4,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // WINDSLASH_SPELL - wind slash
-        {1,1,0},{1,2,0},{1,1,1},{1,1,-1},{1,0,1},{1,0,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
+        {1,0,0},{1,1,0},{1,2,0},{1,1,1},{1,1,-1},{1,0,1},{1,0,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // NOVA_SPELL
         {1,1,0},{1,-1,0},{1,0,1},{1,0,-1},{1,2,0},{1,-2,0},{1,0,2},{1,0,-2},{1,1,1},{1,-1,1},{1,1,-1},{1,-1,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
@@ -383,100 +362,114 @@ int cover_image;
 bool started = false;
 bool ended = false;
 bool about_to_end = false;
-// Music music;
 int start_frame;
 
-int music_bpm = 0;
+uint16_t music_bpm = 0;
 int last_note_frame = -1;
-int last_beat_frame;
-int last_beat_frame_press;
-// int note_frame;
-// int note_frame_start = 0;
-// int note_frame_end = 0;
-float note_time = 0.0;
-float hits_per_second;
-float note_period;
-float beat_guide_tick_size;
-float frames_per_beat;
+uint64_t last_beat_frame = 0;
+uint16_t frames_per_sprite = 1;
+uint32_t diff_frames = 0;
+uint64_t last_beat_frame_press = 0;
+float note_time = 0;
+float hits_per_second = 0;
+float note_period = 0;
+float beat_guide_tick_size = 3;
+float frames_per_beat = 1;
 
-int synch_hit;
-int moving_frames;
-int moved_frames;
-int speed;
+float sync_hit = 0;
+uint16_t speed = 0;
 
-bool wait; // true when game has started
-int random_wait_frame;
+bool wait = false; // true when game has started
+uint64_t random_wait_frame = 0;
 riv_vec2i player_pos;
 int player_direction;
 bool chain_cast = false;
 static int cast_queue[MAX_CAST];
-int last_cast_key_press_frame;
+uint64_t last_cast_key_press_frame = 0;
 bool casting = false;
-int released_spell = -1;
-int completed_spell = -1;
-int release_spell_frame = 0;
-int release_spell_anim_frames = 0;
+int16_t released_spell = -1;
+int16_t completed_spell = -1;
+uint64_t release_spell_frame = 0;
+uint64_t release_spell_anim_frames = 0;
 riv_vec2i release_spell_pos;
-int release_spell_direction;
-int n_spells = sizeof(spellbook) / sizeof(spellbook[0]);
-int n_frostbite_colors;
-int last_move_frame = 0;
-int last_move_dir = 0;
+uint8_t release_spell_direction;
+uint16_t n_spells = sizeof(spellbook) / sizeof(spellbook[0]);
+uint16_t n_frostbite_colors;
+uint64_t last_move_frame = 0;
+uint64_t last_damage_frame = 0;
+uint64_t moved_frames;
+uint64_t moving_frames;
+uint8_t last_move_dir = 0;
 riv_recti wizard_bbox;
-int life_points = 1;
+int16_t life_points = 1;
 uint8_t protection_circles;
 
 int score;
 
 uint64_t sound_id = 1;
 
-MonsterType monster_types[MAX_MONSTER_TYPES];
-Monster monsters[MAX_MONSTERS];
-int n_monster_types = 0;
-int n_monsters = 0;
-int monster_speed;
-int monster_moving_frames;
-static int monster_ssids[MAX_MONSTER_TYPES];
+static MonsterType monster_types[MAX_MONSTER_TYPES];
+static Monster monsters[MAX_MONSTERS];
+uint8_t n_monster_types = 0;
+uint16_t n_monsters = 0;
+static uint8_t monster_ssids[MAX_MONSTER_TYPES];
 
 // items
 bool board_help;
 int item_help;
-int collected_items = 0;
-int help_frame;
+uint16_t collected_items = 0;
+uint64_t help_frame;
 uint8_t n_unlockable_objects;
-int item_id_to_add = 30; //17
+uint16_t item_id_to_add = 30; //17
 int last_item_add_beat;
 
 // config
-float synch_factor = 0.3;
+float sync_factor = 0.3;
 int starting_life_points = 10;
 int time_bonus = 1;
 int kill_bonus = 50;
 int item_bonus = 2000;
-static int monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
-static int monster_notes_to_move[MAX_MONSTER_TYPES] = {3,3,3,3};
-static int monster_damage[MAX_MONSTER_TYPES] = {1,1,1,1};
-static int monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
-static int monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
-static int monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
-int spawn_decrease_interval = 5;
+static uint16_t monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
+static uint16_t monster_notes_to_move[MAX_MONSTER_TYPES] = {3,3,3,3};
+static uint8_t monster_damage[MAX_MONSTER_TYPES] = {1,1,1,1};
+static uint8_t monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
+static uint16_t monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
+static uint8_t monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
+
+uint16_t spawn_decrease_interval = 2;
 bool display_grid_lines = false;
 bool display_initial_help = true;
+bool display_score = true;
 
 static int unlockable_objects[MAX_UNLOCKABLE_ITEMS][5] = { // active,beat_frame,x,y,obj
     {1,0,13,12,1},
     {1,80,14,4,1},
     {1,200,7,9,1},
     {1,500,6,14,13},
+    {0,0,0,0,0},
+    {0,0,0,0,0},
+    {0,0,0,0,0},
+    {0,0,0,0,0},
 }; 
 
 int item_interval = 40;
 static int item_positions[MAX_ITEM_POSITIONS][2] = { // active,beat_frame,x,y,obj
     {12,13},
-    {12,5},
-    {5,6},
-    {4,13}
-}; 
+    {10,5},
+    {3,6},
+    {4,13},
+};
+
+static uint16_t spell_damage[] = {
+    1, //FROSTBITE1_SPELL,
+    1, //FROSTBITE2_SPELL,
+    1, //FROSTBITE3_SPELL,
+    2, //FIREBALL_SPELL,
+    1, //WINDSLASH_SPELL,
+    1, //NOVA_SPELL,
+    0, //PROTECTION_SPELL,
+    1, //SECRET_SPELL,
+};
 static int16_t item_unlock_spell[] = {
     0, //FROSTBITE1_SPELL,
     1, //FROSTBITE2_SPELL,
@@ -487,9 +480,165 @@ static int16_t item_unlock_spell[] = {
     0, //PROTECTION_SPELL,
     4, //SECRET_SPELL,
 };
+static float spell_beats_duration[] = {
+    2.5, //FROSTBITE1_SPELL,
+    2.5, //FROSTBITE2_SPELL,
+    2.5, //FROSTBITE3_SPELL,
+    1.0, //FIREBALL_SPELL,
+    0.75, //WINDSLASH_SPELL,
+    4.0, //NOVA_SPELL,
+    16.0, //PROTECTION_SPELL,
+    5.0, //SECRET_SPELL,
+};
+
+static bool unlocked_spells[] = {
+    false, //FROSTBITE1_SPELL,
+    false, //FROSTBITE2_SPELL,
+    false, //FROSTBITE3_SPELL,
+    false, //FIREBALL_SPELL,
+    false, //WINDSLASH_SPELL,
+    false, //NOVA_SPELL,
+    false, //PROTECTION_SPELL,
+    false, //SECRET_SPELL,
+};
 
 ////
 // Aux functions
+
+int64_t clamp(int64_t v, int64_t min, int64_t max) { v = v < min ? min : v; v = v > max ? max : v; return v; }
+
+int16_t collides_with_layer(riv_vec2i pos, int l) {
+    int y = pos.y / TILE_SIZE;
+    int x = pos.x / TILE_SIZE;
+    if (map[l][y][x] > 0) {
+        return map[l][y][x];
+    }
+    return 0;
+}
+
+void initialize_monsters() {
+    uint8_t ssid = 0;
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("snake.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("slime.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("mouse.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("frog.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+
+    for(int m = 0; m < MAX_MONSTER_TYPES; m++) {
+        if (monster_notes_to_spawn[m] > 0) {
+            MonsterType *mt = &monster_types[n_monster_types];
+            mt->ssid = monster_ssids[m];
+            mt->track = monster_tracks[m];
+            mt->notes_to_spawn = monster_notes_to_spawn[m];
+            mt->notes_to_move = monster_notes_to_move[m];
+            mt->n_notes = 0;
+            mt->n_spawned = 0;
+            mt->n_killed = 0;
+            mt->damage = monster_damage[m];
+            mt->initial_life_points = monster_initial_life_points[m];
+            mt->spawn_object = monster_spawn_object[m];
+            mt->spawn_point.x = -1;
+            mt->spawn_point.y = -1;
+            n_monster_types++;
+        }
+    }
+}
+
+void read_incard_data(uint8_t *data,int from) {//,int size) {
+    char magic[5];
+    for (int i=0; i<MAGIC_SIZE ; i++) magic[i] = data[from + i];
+    magic[MAGIC_SIZE] = '\0';
+    // riv_printf("MAGIC: %s\n",magic);
+    if (!strcmp(magic,"SEQT")) {
+        if (music_bpm) {
+            return;
+        }
+        seqt_init();
+        // music_bpm = music->bpm;
+        seqt_play((seqt_source*)(data + from),-1);
+        seqt_sound *sound = &seqt.sounds[1];
+        // seqt_source* music = sound->source;
+        music_bpm = sound->source->bpm;
+
+        // music = (Music)(data + from);
+
+    // } else if (!strcmp(magic,"SPRS")) {
+
+    //     spng_ctx *ctx = spng_ctx_new(0);
+
+    //     if(ctx == NULL) {
+    //         riv_printf("spng_ctx_new() failed\n");
+    //         return;
+    //     }
+
+    //     int ret = spng_decode_image(ctx, image, image_size, SPNG_FMT_RGBA8, 0);
+    //     riv->images;
+
+    //     wizard_sps = riv_make_spritesheet(riv_make_image("wizard-spritesheet-53.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    //     spng_ctx_free(ctx);
+
+    } else if (!strcmp(magic,"MICS")) {
+        int wi = from + MAGIC_SIZE; // curr_word_index
+
+        uint32_t n_incards = data[from + wi+3] | (uint32_t)data[from + wi+2] << 8
+            | (uint32_t)data[from + wi+1] << 16 | (uint32_t)data[from + wi] << 24;
+        wi += MAGIC_SIZE;
+
+        for (uint32_t i=0; i<n_incards ; i++) {
+
+            uint32_t from_incard_i = data[from + wi+3] | (uint32_t)data[from + wi+2] << 8
+                | (uint32_t)data[from + wi+1] << 16 | (uint32_t)data[from + wi] << 24;
+            wi += MAGIC_SIZE;
+
+            // uint32_t size_incard_i =data[from + wi+3] | (uint32_t)data[from + wi+2] << 8
+            //     | (uint32_t)data[from + wi+1] << 16 | (uint32_t)data[from + wi] << 24;
+            wi += MAGIC_SIZE;
+
+            read_incard_data(data,from_incard_i);//,size_incard_i);
+        }
+
+    }
+}
+
+void update_score() {
+    uint64_t frame = riv->frame - start_frame;
+    score = (time_bonus*frame)/riv->target_fps + item_bonus*collected_items +  kill_bonus*(monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
+    riv->outcard_len = riv_snprintf((char*)riv->outcard, RIV_SIZE_OUTCARD, 
+        "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"collected_items\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}",
+        score,frame, life_points<=0,life_points,collected_items,
+        monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed
+    );
+
+    // if (riv->frame%riv->target_fps==0)
+    // riv_printf("JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}\n",
+    //     score,riv->frame - start_frame, life_points=<=0,life_points,
+    //     monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed
+    // );
+}
+
+void initialize() {
+
+    if (riv->incard_len > 0) {
+        read_incard_data(riv->incard,0);//,riv->incard_len);
+    }
+
+    if (!music_bpm) {
+        seqt_init();
+        seqt_play(seqt_make_source_from_file("seq02_lyno.rivcard"), -1);
+        seqt_sound *sound = &seqt.sounds[1];
+        music_bpm = sound->source->bpm;
+    }
+
+    cover_image = riv_make_image("wizard_cover_palette-384.png", 255);
+    // Load sprites
+    riv_load_palette("palette.png", 32);
+    wizard_sps = riv_make_spritesheet(riv_make_image("wizard-spritesheet-53.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    tileset_sps = riv_make_spritesheet(riv_make_image("tileset.png", 255), TILE_SIZE, TILE_SIZE);
+
+    // initialize monsters
+    initialize_monsters();
+
+    update_score();
+}
 
 void start_game() {
     started = true;
@@ -497,11 +646,17 @@ void start_game() {
     hits_per_second = music_bpm*((1.0*TIME_SIG)/60);
     note_period = hits_per_second/riv->target_fps;
     frames_per_beat = riv->target_fps/(music_bpm/60.0);
-    beat_guide_tick_size = (1.0 * SCREEN_SIZE) / (BEAT_TICKS * frames_per_beat);
-    synch_hit = (int)(frames_per_beat * synch_factor);
+    frames_per_sprite = frames_per_beat / CHARACTER_ANIM_SPRITES;
+    beat_guide_tick_size = (SCREEN_SIZE / BEAT_TICKS) / frames_per_beat;
+    sync_hit = frames_per_beat * sync_factor;
     moving_frames = (int)ceil(frames_per_beat / 4);
     speed = (int)ceil((1.0*TILE_SIZE)/moving_frames);
     last_beat_frame_press = 0;
+
+    diff_frames = 0;
+    last_beat_frame = 0;
+    last_move_frame = 0;
+
     // release_spell_anim_frames = (int)ceil(frames_per_beat * 6 / 4);
 
     int minx = CHARACTER_SIZE;
@@ -544,9 +699,9 @@ void start_game() {
     player_direction = DIR_DOWN;
 
     // head colors
-    for (int i=0; i<riv->spritesheets[wizard_sps].cell_height; i++)  {
+    for (uint32_t i=0; i<riv->spritesheets[wizard_sps].cell_height; i++)  {
         if (got_colors >= HEAD_COLORS) break;
-        for (int j=0; j<riv->spritesheets[wizard_sps].cell_width; j++)  {
+        for (uint32_t j=0; j<riv->spritesheets[wizard_sps].cell_width; j++)  {
             if (got_colors >= HEAD_COLORS) break;
             uint8_t color = *(riv->images[riv->spritesheets[wizard_sps].image_id].pixels + j + i*sps_width);
             if (color < 255) {
@@ -587,9 +742,6 @@ void start_game() {
             unlocked_spells[s] = true;
     }
 
-    // monsters
-    monster_moving_frames = (int)ceil(frames_per_beat / 4);
-    monster_speed = (int)ceil((1.0*TILE_SIZE)/monster_moving_frames);
 
     // monsters bbox
     for (int m=0;m<n_monster_types;++m) {
@@ -597,7 +749,7 @@ void start_game() {
         maxw = 0;
         miny = CHARACTER_SIZE;
         maxh = 0;
-        for (int i=0; i<16; i++)  {
+        for (int i=0; i<32; i++)  {
             riv_recti r = riv_get_sprite_bbox(i,monster_types[m].ssid,1,1);
             if (r.x < minx) minx = r.x;
             if (r.width > maxw) maxw = r.width;
@@ -637,145 +789,12 @@ void start_game() {
 
     life_points = starting_life_points;
 
-    seqt_set_start(sound_id,4.0*frames_per_beat/riv->target_fps);
+    seqt_set_start(sound_id,(4.0*frames_per_beat)/riv->target_fps);
 
     // riv_printf("START\n");
 }
 
-int64_t clamp(int64_t v, int64_t min, int64_t max) { v = v < min ? min : v; v = v > max ? max : v; return v; }
-
-int16_t collides_with_layer(riv_vec2i pos, int l) {
-    int y = pos.y / TILE_SIZE;
-    int x = pos.x / TILE_SIZE;
-    if (map[l][y][x] > 0) {
-        return map[l][y][x];
-    }
-    return 0;
-}
-
-void initialize_monsters() {
-    uint8_t ssid = 0;
-    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("snake.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
-    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("slime.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
-    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("mouse.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
-    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("frog.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
-
-    for(int m = 0; m < MAX_MONSTER_TYPES; m++) {
-        if (monster_notes_to_spawn[m] > 0) {
-            MonsterType *mt = &monster_types[n_monster_types];
-            mt->ssid = monster_ssids[m];
-            mt->track = monster_tracks[m];
-            mt->notes_to_spawn = monster_notes_to_spawn[m];
-            mt->notes_to_move = monster_notes_to_move[m];
-            mt->damage = monster_damage[m];
-            mt->initial_life_points = monster_initial_life_points[m];
-            mt->spawn_object = monster_spawn_object[m];
-            mt->spawn_point.x = -1;
-            mt->spawn_point.y = -1;
-            n_monster_types++;
-        }
-    }
-}
-
-void read_incard_data(uint8_t *data,int from,int size) {
-    char magic[5];
-    for (int i=0; i<MAGIC_SIZE ; i++) magic[i] = data[from + i];
-    magic[MAGIC_SIZE] = '\0';
-    // riv_printf("MAGIC: %s\n",magic);
-    if (!strcmp(magic,"SEQT")) {
-        if (music_bpm) {
-            return;
-        }
-        seqt_init();
-        // music_bpm = music->bpm;
-        seqt_play((seqt_source*)(data + from),-1);
-        seqt_sound *sound = &seqt.sounds[1];
-        seqt_source* music = sound->source;
-        music_bpm = sound->source->bpm;
-
-        // music = (Music)(data + from);
-
-    // } else if (!strcmp(magic,"SPRS")) {
-
-    //     spng_ctx *ctx = spng_ctx_new(0);
-
-    //     if(ctx == NULL) {
-    //         riv_printf("spng_ctx_new() failed\n");
-    //         return;
-    //     }
-
-    //     int ret = spng_decode_image(ctx, image, image_size, SPNG_FMT_RGBA8, 0);
-    //     riv->images;
-
-    //     wizard_sps = riv_make_spritesheet(riv_make_image("wizard-spritesheet-53.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
-    //     spng_ctx_free(ctx);
-
-    } else if (!strcmp(magic,"MICS")) {
-        int wi = from + MAGIC_SIZE; // curr_word_index
-
-        uint32_t n_incards = data[from + wi+3] | (uint32_t)data[from + wi+2] << 8
-            | (uint32_t)data[from + wi+1] << 16 | (uint32_t)data[from + wi] << 24;
-        wi += MAGIC_SIZE;
-
-        for (int i=0; i<n_incards ; i++) {
-
-            uint32_t from_incard_i = data[from + wi+3] | (uint32_t)data[from + wi+2] << 8
-                | (uint32_t)data[from + wi+1] << 16 | (uint32_t)data[from + wi] << 24;
-            wi += MAGIC_SIZE;
-
-            uint32_t size_incard_i =data[from + wi+3] | (uint32_t)data[from + wi+2] << 8
-                | (uint32_t)data[from + wi+1] << 16 | (uint32_t)data[from + wi] << 24;
-            wi += MAGIC_SIZE;
-
-            read_incard_data(data,from_incard_i,size_incard_i);
-        }
-
-    }
-}
-
-void update_score() {
-    uint64_t frame = riv->frame - start_frame;
-    score = (time_bonus*frame)/riv->target_fps + item_bonus*collected_items +  kill_bonus*(monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
-    riv->outcard_len = riv_snprintf((char*)riv->outcard, RIV_SIZE_OUTCARD, 
-        "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"collected_items\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}",
-        score,frame, life_points==0,life_points,collected_items,
-        monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed
-    );
-
-    // if (riv->frame%riv->target_fps==0)
-    // riv_printf("JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}\n",
-    //     score,riv->frame - start_frame, life_points==0,life_points,
-    //     monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed
-    // );
-}
-
-void initialize() {
-
-    if (riv->incard_len > 0) {
-        read_incard_data(riv->incard,0,riv->incard_len);
-    }
-
-    if (!music_bpm) {
-        seqt_init();
-        seqt_play(seqt_make_source_from_file("seq02_lyno.rivcard"), -1);
-        seqt_sound *sound = &seqt.sounds[1];
-        music_bpm = sound->source->bpm;
-    }
-
-    cover_image = riv_make_image("wizard_cover_palette-384.png", 255);
-    // Load sprites
-    riv_load_palette("palette.png", 32);
-    wizard_sps = riv_make_spritesheet(riv_make_image("wizard-spritesheet-53.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
-    tileset_sps = riv_make_spritesheet(riv_make_image("tileset.png", 255), TILE_SIZE, TILE_SIZE);
-
-    // initialize monsters
-    initialize_monsters();
-
-    update_score();
-}
-
 void end_session() {
-    // riv_printf("SESSION OVER\n");
     about_to_end = true;
     update_score();
     // Quit in 2 seconds
@@ -801,6 +820,7 @@ void play_music() {
     if (!music_bpm) return;
     seqt_sound *sound = seqt_get_sound(sound_id);
     seqt_poll_sound(sound);
+    if (sound->frame >= sound->stop_frame) return;
 
     note_time = note_time + note_period;
     int note_base_frame = (int)note_time;
@@ -889,14 +909,13 @@ void update_state() {
     }
     play_music();
 
-    int diff_frames = riv->frame - last_beat_frame;
-    bool in_synch_frame = diff_frames < synch_hit || diff_frames > frames_per_beat - synch_hit;
-    int synch_beat_frame = last_beat_frame;
-    if (diff_frames > frames_per_beat - synch_hit) synch_beat_frame = last_beat_frame + frames_per_beat;
-    bool move = false;
+    diff_frames = riv->frame - last_beat_frame;
+    bool in_sync_frame = diff_frames < sync_hit || diff_frames > frames_per_beat - sync_hit;
+    uint64_t sync_beat_frame = last_beat_frame;
+    if (diff_frames > frames_per_beat - sync_hit) sync_beat_frame = last_beat_frame + frames_per_beat;
 
     // Add crystal
-    if (diff_frames == 0) {
+    if (!diff_frames) {
         int beat = last_note_frame/TIME_SIG;
         if (collected_items < n_unlockable_objects) {
             for (int i=0;i<n_unlockable_objects;++i) {
@@ -907,7 +926,8 @@ void update_state() {
                 }
             }
         } else if (beat > last_item_add_beat + item_interval) {
-            uint64_t i = riv_rand_uint(MAX_ITEM_POSITIONS);
+            uint64_t i = riv_rand_uint(MAX_ITEM_POSITIONS-1);
+
             map[MAP_LAYER_ITEMS][item_positions[i][1]][item_positions[i][0]] = item_id_to_add;
             last_item_add_beat = beat;
         }
@@ -939,8 +959,8 @@ void update_state() {
 
     bool reset_cast_queue = false;
 
-    // reset casting if pressed out of synch
-    if (!change_facing && (!in_synch_frame || synch_beat_frame == last_beat_frame_press) && 
+    // reset casting if pressed out of sync
+    if (!change_facing && (!in_sync_frame || sync_beat_frame == last_beat_frame_press) && 
             (riv->keys[RIV_GAMEPAD_RIGHT].press || riv->keys[RIV_GAMEPAD_LEFT].press || 
                 riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
         reset_cast_queue = true;
@@ -948,8 +968,8 @@ void update_state() {
         riv_waveform(&error_sfx);
     }
 
-    // reset casting if missed synch
-    if (casting && cast_queue[0] != -1 && riv->frame > last_cast_key_press_frame + frames_per_beat + synch_hit) {
+    // reset casting if missed sync
+    if (casting && cast_queue[0] != -1 && riv->frame > last_cast_key_press_frame + frames_per_beat + sync_hit) {
         reset_cast_queue = true;
     }
 
@@ -960,15 +980,14 @@ void update_state() {
     }
 
     bool key_press = false;
-    if (!change_facing && in_synch_frame && synch_beat_frame > last_beat_frame_press &&
+    if (!change_facing && in_sync_frame && sync_beat_frame > last_beat_frame_press &&
             (riv->keys[RIV_GAMEPAD_RIGHT].press || riv->keys[RIV_GAMEPAD_LEFT].press || 
                 riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
         key_press = true;
-        last_beat_frame_press = synch_beat_frame;
+        last_beat_frame_press = sync_beat_frame;
     }
 
     // check casting
-    // if (key_press && casting && riv->frame > last_cast_key_press_frame + frames_per_beat/2) {
     if (key_press && casting) {
         int i=0;
         for (; i<MAX_CAST; i++) {
@@ -980,7 +999,7 @@ void update_state() {
             check_completed_spell();
         }
         
-        last_cast_key_press_frame = synch_beat_frame;
+        last_cast_key_press_frame = sync_beat_frame;
     }
 
     // check movement
@@ -995,7 +1014,6 @@ void update_state() {
             player_pos.x+dx+wizard_bbox.x,
             player_pos.y+dy+wizard_bbox.y};
         if (!(collides_with_layer(new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
-            move = true;
             last_move_frame = riv->frame;
             last_move_dir = player_direction;
             moved_frames = 0;
@@ -1021,6 +1039,7 @@ void update_state() {
             release_spell_direction = player_direction;
             if (released_spell == PROTECTION_SPELL) 
                 protection_circles = PROTECTION_CIRCLES;
+            last_damage_frame = 0;
         }
         
         // release
@@ -1029,6 +1048,7 @@ void update_state() {
     }
 
     // apply movement
+    bool moved = false;
     if (riv->frame < last_move_frame + moving_frames && moved_frames < TILE_SIZE) {
         int final_speed = speed;
         if (moved_frames + final_speed > TILE_SIZE)
@@ -1081,120 +1101,138 @@ void update_state() {
                     board_help = true;
                 }
             }
+            moved_frames == 0;
+            moved = true;
         }
     }
 
-    // evaluate if monsters will move and spawn
-    if (diff_frames == 0 || moved_frames == TILE_SIZE) {
+    // evaluate if monsters will move
+    riv_vec2i player_base = {
+        player_pos.x+wizard_bbox.x,
+        player_pos.y+wizard_bbox.y};
+    int player_tile_x = player_base.x/TILE_SIZE;
+    int player_tile_y = player_base.y/TILE_SIZE;
 
-        // evaluate if monsters will move
-        riv_vec2i player_base = {
-            player_pos.x+wizard_bbox.x,
-            player_pos.y+wizard_bbox.y};
-        int player_tile_x = player_base.x/TILE_SIZE;
-        int player_tile_y = player_base.y/TILE_SIZE;
+    for (int i=0;i<n_monsters;++i) {
+        if (monsters[i].life_points <= 0) continue;
 
-        for (int i=0;i<n_monsters;++i) {
-            if (monsters[i].life_points == 0) continue;
+        riv_vec2i monster_base = {
+            monsters[i].pos.x+monsters[i].type->bbox.x,
+            monsters[i].pos.y+monsters[i].type->bbox.y};
+        int monster_tile_x = monster_base.x/TILE_SIZE;
+        int monster_tile_y = monster_base.y/TILE_SIZE;
 
-            riv_vec2i monster_base = {
-                monsters[i].pos.x+monsters[i].type->bbox.x,
-                monsters[i].pos.y+monsters[i].type->bbox.y};
-            int monster_tile_x = monster_base.x/TILE_SIZE;
-            int monster_tile_y = monster_base.y/TILE_SIZE;
+        int dx = 0;
+        int dy = 0;
 
-            int dx = 0;
-            int dy = 0;
+        // evaluate if monster move this beat
+        if (!diff_frames) {
+            // update position if it was moving
+            if (monsters[i].moving == MOVING) {
+                if (monsters[i].direction == DIR_LEFT) monsters[i].pos.x -= TILE_SIZE;
+                else if (monsters[i].direction == DIR_RIGHT) monsters[i].pos.x += TILE_SIZE;
+                else if (monsters[i].direction == DIR_UP) monsters[i].pos.y -= TILE_SIZE;
+                else if (monsters[i].direction == DIR_DOWN) monsters[i].pos.y += TILE_SIZE;
+            }
 
-            // move monster
-            if (riv->frame == last_beat_frame) {
-                // update position if it was moving
-                if (monsters[i].moving == MOVING) {
-                    if (monsters[i].direction == DIR_LEFT) monsters[i].pos.x -= TILE_SIZE;
-                    else if (monsters[i].direction == DIR_RIGHT) monsters[i].pos.x += TILE_SIZE;
-                    else if (monsters[i].direction == DIR_UP) monsters[i].pos.y -= TILE_SIZE;
-                    else if (monsters[i].direction == DIR_DOWN) monsters[i].pos.y += TILE_SIZE;
-                }
+            monsters[i].moving = STANDING;
+            int dir;
+            uint32_t route = riv_rand_uint(3);
+            if (route == 0) {
+                dir = DIR_UP;
+                if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
+                else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
+                else if (player_tile_y >= monster_tile_y) dir = DIR_DOWN;
+            } else if (route == 1) {
+                dir = DIR_LEFT;
+                if (player_tile_y < monster_tile_y) dir = DIR_UP;
+                else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
+                else if (player_tile_x >= monster_tile_x) dir = DIR_RIGHT;
+            } else if (route == 2) {
+                dir = DIR_DOWN;
+                if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
+                else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
+                else if (player_tile_y <= monster_tile_y) dir = DIR_UP;
+            } else {
+                dir = DIR_RIGHT;
+                if (player_tile_y < monster_tile_y) dir = DIR_UP;
+                else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
+                else if (player_tile_x <= monster_tile_x) dir = DIR_LEFT;
+            }
+            
+            monsters[i].direction = dir;
+            monsters[i].delta.x = 0;
+            monsters[i].delta.y = 0;
 
-                monsters[i].moving = STANDING;
-                int dir;
-                uint32_t route = last_note_frame/TIME_SIG%4;
-                if (route == 0) {
-                    dir = DIR_UP;
-                    if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
-                    else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
-                    else if (player_tile_y >= monster_tile_y) dir = DIR_DOWN;
-                } else if (route == 1) {
-                    dir = DIR_LEFT;
-                    if (player_tile_y < monster_tile_y) dir = DIR_UP;
-                    else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
-                    else if (player_tile_x >= monster_tile_x) dir = DIR_RIGHT;
-                } else if (route == 2) {
-                    dir = DIR_DOWN;
-                    if (player_tile_x < monster_tile_x) dir = DIR_LEFT;
-                    else if (player_tile_x > monster_tile_x) dir = DIR_RIGHT;
-                    else if (player_tile_y <= monster_tile_y) dir = DIR_UP;
+            if (monsters[i].type->notes_next_tick >= monsters[i].type->notes_to_move) {
+                // next position
+
+                if (dir == DIR_LEFT) dx = -1;
+                else if (dir == DIR_RIGHT) dx = 1;
+                else if (dir == DIR_UP) dy = -1;
+                else if (dir == DIR_DOWN) dy = 1;
+
+                // collides with player
+                if (monster_tile_x + dx == player_tile_x && monster_tile_y + dy == player_tile_y) {
+                    monsters[i].moving = PARTIALLY;
                 } else {
-                    dir = DIR_RIGHT;
-                    if (player_tile_y < monster_tile_y) dir = DIR_UP;
-                    else if (player_tile_y > monster_tile_y) dir = DIR_DOWN;
-                    else if (player_tile_x <= monster_tile_x) dir = DIR_LEFT;
-                }
-                
-                monsters[i].direction = dir;
-                monsters[i].delta.x = 0;
-                monsters[i].delta.y = 0;
+                    riv_vec2i new_postl = {
+                        monsters[i].pos.x+monsters[i].type->bbox.x+dx*TILE_SIZE,
+                        monsters[i].pos.y+monsters[i].type->bbox.y+dy*TILE_SIZE};
+                    monsters[i].moving = STANDING;
+                    if (!(collides_with_layer(new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
+                        // move = true;
+                        // last_move_frame = riv->frame;
+                        // last_move_dir = player_direction;
+                        // moved_frames = 0;
 
-                if (monsters[i].type->notes_next_tick >= monsters[i].type->notes_to_move) {
-                    // next position
-
-                    if (dir == DIR_LEFT) dx = -1;
-                    else if (dir == DIR_RIGHT) dx = 1;
-                    else if (dir == DIR_UP) dy = -1;
-                    else if (dir == DIR_DOWN) dy = 1;
-
-                    // collides with player
-                    if (monster_tile_x + dx == player_tile_x && monster_tile_y + dy == player_tile_y) {
-                        monsters[i].moving = PARTIALLY;
-                    } else {
-                        riv_vec2i new_postl = {
-                            monsters[i].pos.x+monsters[i].type->bbox.x+dx*TILE_SIZE,
-                            monsters[i].pos.y+monsters[i].type->bbox.y+dy*TILE_SIZE};
-                        monsters[i].moving = STANDING;
-                        if (!(collides_with_layer(new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
-                            // move = true;
-                            // last_move_frame = riv->frame;
-                            // last_move_dir = player_direction;
-                            // moved_frames = 0;
-
-                            monsters[i].moving = MOVING;
-                        }
+                        monsters[i].moving = MOVING;
                     }
+                }
 
+            }
+        }
+        if (monsters[i].moving == MOVING || monsters[i].moving == PARTIALLY) {
+            int delta = 0;
+            if (monsters[i].moving == MOVING) {
+                delta = TILE_SIZE*(riv->frame - last_beat_frame)/frames_per_beat;
+            } else {
+                if (riv->frame - last_beat_frame < frames_per_beat/2) {
+                    delta = TILE_SIZE*(riv->frame - last_beat_frame)/frames_per_beat;
+                } else {
+                    delta = TILE_SIZE*(1 - (riv->frame - last_beat_frame)/frames_per_beat);
                 }
             }
-            if (monster_tile_x + dx == player_tile_x && monster_tile_y + dy == player_tile_y) {
-                if (released_spell == PROTECTION_SPELL) {
-                    // Monster attacked but wizard defended
-                    riv_waveform(&monster_defend_sfx);
-                    protection_circles--;
-                    if (protection_circles == 0)
-                        released_spell = -1;
-                } else {
-                    // Monster attacked
-                    riv_waveform(&monster_damage_sfx);
-                    life_points--;
-                    if (life_points == 0) {
-                        end_session();
-                        return;
-                    }
+
+            if (monsters[i].direction == DIR_LEFT) monsters[i].delta.x = -delta;
+            else if (monsters[i].direction == DIR_RIGHT) monsters[i].delta.x = delta;
+            else if (monsters[i].direction == DIR_UP) monsters[i].delta.y = -delta;
+            else if (monsters[i].direction == DIR_DOWN) monsters[i].delta.y = delta;
+        }
+
+        // apply damage if player finished movement on top of monsters
+        if ((!diff_frames || moved) && monster_tile_x + dx == player_tile_x && monster_tile_y + dy == player_tile_y) {
+            if (released_spell == PROTECTION_SPELL) {
+                // Monster attacked but wizard defended
+                riv_waveform(&monster_defend_sfx);
+                protection_circles--;
+                if (protection_circles == 0)
+                    released_spell = -1;
+            } else {
+                // Monster attacked
+                riv_waveform(&monster_damage_sfx);
+                life_points -= monsters[i].type->damage;
+                if (life_points <= 0) {
+                    end_session();
+                    return;
                 }
             }
         }
-        if (moved_frames == TILE_SIZE) moved_frames = 0;
+    }
 
+        // spawn monsters
+    if (!diff_frames) {
         for (int i = 0; i < n_monster_types; i++) {
-            // spawn monsters
             if (monster_types[i].n_notes/monster_types[i].notes_to_spawn > monster_types[i].n_spawned) {
                 if (monster_types[i].spawn_point.x > -1 && monster_types[i].spawn_point.y > -1) {
                     Monster *m = &monsters[n_monsters];
@@ -1202,55 +1240,33 @@ void update_state() {
                     m->pos.x = monster_types[i].spawn_point.x;
                     m->pos.y = monster_types[i].spawn_point.y;
                     m->life_points = monster_types[i].initial_life_points;
+                    m->status = 0;
+                    m->direction = DIR_RIGHT;
+                    m->moving = STANDING;
+                    m->delta.x = 0;
+                    m->delta.y = 0;
+                    m->rnd.x = riv_rand_int(-2,2);
+                    m->rnd.y = riv_rand_int(-2,2);
+
                     n_monsters++;
-                    // riv_printf("New monster %d spawned %d %d %d\n",i, monster_types[i].n_notes,monster_types[i].notes_to_spawn, monster_types[i].n_spawned);
                     monster_types[i].n_spawned++;
                     monster_types[i].notes_to_spawn = monster_types[i].notes_to_spawn > spawn_decrease_interval ? monster_types[i].notes_to_spawn - spawn_decrease_interval : 1;
                 }
             }
         }
-    } else {
-        // move monsters
-        for (int i=0;i<n_monsters;++i) {
-            if (monsters[i].life_points == 0) continue;
-            if (monsters[i].moving == MOVING || monsters[i].moving == PARTIALLY) {
-
-                int delta = 0;
-                if (monsters[i].moving == MOVING) {
-                    delta = TILE_SIZE*(riv->frame - last_beat_frame)/frames_per_beat;
-                } else {
-                    if (riv->frame - last_beat_frame < frames_per_beat/2) {
-                        delta = TILE_SIZE*(riv->frame - last_beat_frame)/frames_per_beat;
-                    } else {
-                        delta = TILE_SIZE*(1 - (riv->frame - last_beat_frame)/frames_per_beat);
-                    }
-                }
-
-                if (monsters[i].direction == DIR_LEFT) monsters[i].delta.x = -delta;
-                else if (monsters[i].direction == DIR_RIGHT) monsters[i].delta.x = delta;
-                else if (monsters[i].direction == DIR_UP) monsters[i].delta.y = -delta;
-                else if (monsters[i].direction == DIR_DOWN) monsters[i].delta.y = delta;
-            }
-        }
     }
 
     // check spell damage
-    if (released_spell > -1 && released_spell != PROTECTION_SPELL) {
+    if (released_spell > -1 && released_spell != PROTECTION_SPELL && riv->frame > last_damage_frame + frames_per_beat) {
 
         // spell effect area
-        riv_vec2i player_base = {
-            player_pos.x+wizard_bbox.x,
-            player_pos.y+wizard_bbox.y};
         int release_spell_x = release_spell_pos.x;
         int release_spell_y = release_spell_pos.y;
         int release_spell_tile_x = release_spell_x/TILE_SIZE;
         int release_spell_tile_y = release_spell_y/TILE_SIZE;
 
-        int player_tile_x = player_base.x/TILE_SIZE;
-        int player_tile_y = player_base.y/TILE_SIZE;
-
         for (int i=0;i<n_monsters;++i) {
-            if (monsters[i].life_points == 0) continue;
+            if (monsters[i].life_points <= 0) continue;
             riv_vec2i monster_base = {
                 monsters[i].pos.x+monsters[i].type->bbox.x,
                 monsters[i].pos.y+monsters[i].type->bbox.y};
@@ -1262,7 +1278,7 @@ void update_state() {
                 riv_waveform(&monster_hit_sfx);
                 // Hit monster
                 monsters[i].life_points--;
-                if (monsters[i].life_points == 0) {
+                if (monsters[i].life_points <= 0) {
                     // Killed monster
                     monsters[i].type->n_killed++;
                 }
@@ -1290,8 +1306,8 @@ void update_state() {
                     if (release_spell_tile_x + x == monster_tile_x && release_spell_tile_y + y == monster_tile_y) {
                         riv_waveform(&monster_hit_sfx);
                         // Hit monster
-                        monsters[i].life_points--;
-                        if (monsters[i].life_points == 0) {
+                        monsters[i].life_points -= spell_damage[released_spell];
+                        if (monsters[i].life_points <= 0) {
                             // Killed monster
                             monsters[i].type->n_killed++;
                         }
@@ -1300,6 +1316,8 @@ void update_state() {
             }
 
         }
+
+        last_damage_frame = riv->frame;
     }
     update_score();
 }
@@ -1323,9 +1341,8 @@ void draw_start_screen() {
 
 void draw_beat_guide() {
 
-    int diff_frames = riv->frame - last_beat_frame;
-    int dx = diff_frames;
-    int delta_x = round(diff_frames * beat_guide_tick_size);
+    uint32_t dx = diff_frames;
+    uint16_t delta_x = round(diff_frames * beat_guide_tick_size);
 
     riv_draw_rect_fill(0,SCREEN_SIZE - TILE_SIZE, SCREEN_SIZE, 2, RIV_COLOR_SLATE);
 
@@ -1358,7 +1375,7 @@ void draw_cast_moves() {
 
 void draw_spell() {
 
-    if (released_spell > -1 && riv->frame <= release_spell_frame + release_spell_anim_frames) {
+    if (released_spell > -1) {
 
         // draw spell effect
         riv_vec2i player_base = {
@@ -1373,8 +1390,8 @@ void draw_spell() {
         if (display_grid_lines) {
             for(uint8_t effect_tile = 0; effect_tile < MAX_SPELL_REACH_TILES; effect_tile++) {
                 if (!spells_effect_area[released_spell][effect_tile][0]) break;
-                int x;
-                int y;
+                int x = 0;
+                int y = 0;
 
                 if (release_spell_direction == DIR_DOWN) {
                     x = spells_effect_area[released_spell][effect_tile][2];
@@ -1400,34 +1417,35 @@ void draw_spell() {
             if (curr_anim_frames%((int)frames_per_beat/4) == 0) 
                 riv_waveform(&frostbite_sfx);
 
-            int base_x;
-            int base_y;
-            int coef_x;
-            int coef_y;
-            int frostbite_reach = 1;
+            int base_x = 0;
+            int base_y = 0;
+            int coef_x = 0;
+            int coef_y = 0;
+            double frostbite_reach = 1;
             if (released_spell == FROSTBITE2_SPELL) {
                 frostbite_reach = 2;
             } else if (released_spell == FROSTBITE3_SPELL) {
                 frostbite_reach = 3;
             }
+            frostbite_reach += 0.5;
 
             if (release_spell_direction == DIR_DOWN) {
                 base_x = release_spell_x;
-                base_y = release_spell_y+wizard_bbox.height;
+                base_y = release_spell_y+wizard_bbox.height/2;
                 coef_x = 0;
                 coef_y = 1;
             } else if (release_spell_direction == DIR_LEFT) {
-                base_x = release_spell_x;
+                base_x = release_spell_x+wizard_bbox.width/2;
                 base_y = release_spell_y+wizard_bbox.height;
                 coef_x = -1;
                 coef_y = 0;
             } else if (release_spell_direction == DIR_UP) {
                 base_x = release_spell_x+wizard_bbox.width;
-                base_y = release_spell_y;
+                base_y = release_spell_y+wizard_bbox.height/2;
                 coef_x = 0;
                 coef_y = -1;
             } else if (release_spell_direction == DIR_RIGHT) {
-                base_x = release_spell_x+wizard_bbox.width;
+                base_x = release_spell_x+wizard_bbox.width/2;
                 base_y = release_spell_y;
                 coef_x = 1;
                 coef_y = 0;
@@ -1453,11 +1471,11 @@ void draw_spell() {
             int delta_pixels = (outer_radius-inner_radius) * delta_frames / release_spell_anim_frames;
             // double delta_degrees = delta_frames < release_spell_anim_frames/2 ? 2*M_PI * delta_frames / release_spell_anim_frames : -2*M_PI * delta_frames / release_spell_anim_frames/2 ;
             double delta_degrees = 3*M_PI_4 * delta_frames / release_spell_anim_frames;
-            double delta_degrees2 = M_PI_2 * delta_frames / release_spell_anim_frames;
+            // double delta_degrees2 = M_PI_2 * delta_frames / release_spell_anim_frames;
 
-            int rotation_degrees;
-            int coef_x;
-            int coef_y;
+            double rotation_degrees = 0;
+            int coef_x = 0;
+            int coef_y = 0;
             if (release_spell_direction == DIR_DOWN) {
                 rotation_degrees = M_PI_2;
                 coef_x = 0;
@@ -1543,8 +1561,8 @@ void draw_spell() {
             int delta_frames = riv->frame - release_spell_frame;
             int delta_pixels = FIREBALL_REACH * TILE_SIZE * delta_frames / release_spell_anim_frames;
 
-            int x;
-            int y;
+            int x = 0;
+            int y = 0;
             if (release_spell_direction == DIR_DOWN) {
                 x = release_spell_x + wizard_bbox.width/2;
                 y = release_spell_y+wizard_bbox.height + delta_pixels;
@@ -1558,10 +1576,10 @@ void draw_spell() {
                 x = release_spell_x+wizard_bbox.width + delta_pixels;
                 y = release_spell_y+wizard_bbox.height/2;
             }
-            riv_draw_circle_fill(x, y, 20+riv_rand_uint(2), RIV_COLOR_LIGHTYELLOW);
-            riv_draw_circle_fill(x, y, 16+riv_rand_uint(2), RIV_COLOR_YELLOW);
-            riv_draw_circle_fill(x, y, 12+riv_rand_uint(2), RIV_COLOR_ORANGE);
-            riv_draw_circle_fill(x, y, 8+riv_rand_uint(2), RIV_COLOR_RED);
+            riv_draw_circle_fill(x, y, 3*TILE_SIZE/2+riv_rand_uint(2), RIV_COLOR_LIGHTYELLOW);
+            riv_draw_circle_fill(x, y, TILE_SIZE+riv_rand_uint(2), RIV_COLOR_YELLOW);
+            riv_draw_circle_fill(x, y, 3*TILE_SIZE/4+riv_rand_uint(2), RIV_COLOR_ORANGE);
+            riv_draw_circle_fill(x, y, TILE_SIZE/2+riv_rand_uint(2), RIV_COLOR_RED);
         } else if (released_spell == PROTECTION_SPELL) {
             int curr_anim_frames = riv->frame-release_spell_frame;
             if (curr_anim_frames%((int)frames_per_beat) == 0) 
@@ -1655,9 +1673,9 @@ void draw_player() {
             riv->draw.pal[head_colors[c]] = 16 + (riv->frame / 2) % 16 + c;
         }
     }
-    int base_frame = player_direction * CHARACTER_ANIM_FRAMES;
-    int anim_frame = ((riv->frame / ((int)frames_per_beat/TIME_SIG)) % CHARACTER_ANIM_FRAMES);
-    riv_draw_sprite(base_frame + anim_frame, wizard_sps, player_pos.x, player_pos.y, 1, 1, 1, 1);
+    int base_sprite = player_direction * CHARACTER_ANIM_SPRITES;
+    int anim_sprite = diff_frames / frames_per_sprite;
+    riv_draw_sprite(base_sprite + anim_sprite, wizard_sps, player_pos.x, player_pos.y, 1, 1, 1, 1);
     if (display_grid_lines) 
         riv_draw_rect_line(player_pos.x+wizard_bbox.x,player_pos.y+wizard_bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_PEACH);
     if (chain_cast) { // Reset color palette swap
@@ -1669,17 +1687,19 @@ void draw_player() {
 }
 
 void draw_monsters() {
-    for (int i=0;i<n_monsters;++i) {
-        if (monsters[i].life_points == 0) continue;
+    for (uint16_t i=0;i<n_monsters;++i) {
+        if (monsters[i].life_points <= 0) continue;
 
-        int base_frame = monsters[i].direction * CHARACTER_ANIM_FRAMES * 2;
-        int anim_frame = ((riv->frame / ((int)frames_per_beat/TIME_SIG)) % CHARACTER_ANIM_FRAMES);
+        uint16_t base_sprite = monsters[i].direction * CHARACTER_ANIM_SPRITES * 2;
+        uint16_t anim_sprite = diff_frames / frames_per_sprite;
+        anim_sprite = (anim_sprite + i) % CHARACTER_ANIM_SPRITES;
         if (monsters[i].moving == STANDING) {
-            anim_frame += CHARACTER_ANIM_FRAMES;
+            anim_sprite += CHARACTER_ANIM_SPRITES;
         }
-
-        riv_draw_sprite(base_frame + anim_frame, monsters[i].type->ssid, 
-            monsters[i].pos.x + monsters[i].delta.x, monsters[i].pos.y + monsters[i].delta.y, 1, 1, 1, 1);
+        riv_draw_sprite(base_sprite + anim_sprite, monsters[i].type->ssid, 
+            monsters[i].pos.x + monsters[i].delta.x + monsters[i].rnd.x,
+            monsters[i].pos.y + monsters[i].delta.y + monsters[i].rnd.y,
+            1, 1, 1, 1);
         if (display_grid_lines) 
             riv_draw_rect_line(monsters[i].pos.x+monsters[i].type->bbox.x,monsters[i].pos.y+monsters[i].type->bbox.y,wizard_bbox.width,wizard_bbox.height,RIV_COLOR_LIGHTRED);
     }
@@ -1702,7 +1722,7 @@ void draw_spell_recipe(uint8_t spell, uint32_t pos, uint32_t x, uint32_t y, uint
         riv_snprintf(buf, sizeof(buf), "Frostbite 3: %c %c %c %c",2,2,2,2);
         break;
     case WINDSLASH_SPELL:
-        riv_snprintf(buf, sizeof(buf), "Windslash: %c %c %c",2,1,2);
+        riv_snprintf(buf, sizeof(buf), "Windslash: %c %c %c",1,2,2);
         break;
     case FIREBALL_SPELL:
         riv_snprintf(buf, sizeof(buf), "Fireball: %c %c %c %c",2,2,1,1);
@@ -1752,9 +1772,11 @@ void draw_help() {
 }
 
 void draw_stats() {
-    char buf[128];
-    riv_snprintf(buf, sizeof(buf), "Score: %d",score);
-    riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_TOPRIGHT, SCREEN_SIZE-10,2, 2, RIV_COLOR_WHITE);
+    if (display_score) {
+        char buf[128];
+        riv_snprintf(buf, sizeof(buf), "Score: %d",score);
+        riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_TOPRIGHT, SCREEN_SIZE-10,2, 2, RIV_COLOR_WHITE);
+    }
 
     int life_bar_size = (int)((((float)SCREEN_SIZE)/starting_life_points)*life_points);
     if (life_bar_size == 0) life_bar_size = 2;
@@ -1807,7 +1829,7 @@ void draw() {
 // Main loop
 
 int main(int argc, char* argv[]) {
-    uint32_t fps = 30;
+    uint32_t fps = TARGET_FPS;
 
     if (argc > 1) {
         if (argc % 2 == 0) {
@@ -1819,8 +1841,8 @@ int main(int argc, char* argv[]) {
         for (int i = 1; i < argc; i+=2) {
             if (strcmp(argv[i], "-fps") == 0) {
                 fps = atoi(argv[i+1]);
-            } else if (strcmp(argv[i], "-synch-factor") == 0) {
-                synch_factor = strtof(argv[i+1], NULL);
+            } else if (strcmp(argv[i], "-sync-factor") == 0) {
+                sync_factor = strtof(argv[i+1], NULL);
             } else if (strcmp(argv[i], "-starting-life") == 0) {
                 starting_life_points = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-time-bonus") == 0) {
@@ -1835,6 +1857,8 @@ int main(int argc, char* argv[]) {
                 display_grid_lines = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-display-initial-help") == 0) {
                 display_initial_help = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-display-score") == 0) {
+                display_score = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-monster-notes-to-spawn") == 0) {
                 char *token = strtok(argv[i+1], delim);
                 for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
@@ -1896,6 +1920,18 @@ int main(int argc, char* argv[]) {
                     int r = t/2;
                     int c = t%2;
                     item_positions[r][c] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-spell-damage") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < n_spells; t++) {
+                    spell_damage[t] = atoi(token);
+                    token = strtok(NULL, delim); 
+                }
+            } else if (strcmp(argv[i], "-spell-duration") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < n_spells; t++) {
+                    spell_beats_duration[t] = strtof(token, NULL);
                     token = strtok(NULL, delim); 
                 }
             }
