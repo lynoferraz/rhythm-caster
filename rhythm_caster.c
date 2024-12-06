@@ -338,7 +338,7 @@ static int spells_effect_area[][MAX_SPELL_REACH_TILES][3] = { // model {active,f
         {1,0,0},{1,1,0},{1,2,0},{1,1,1},{1,1,-1},{1,0,1},{1,0,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // NOVA_SPELL
-        {1,1,0},{1,-1,0},{1,0,1},{1,0,-1},{1,2,0},{1,-2,0},{1,0,2},{1,0,-2},{1,1,1},{1,-1,1},{1,1,-1},{1,-1,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
+        {1,0,0},{1,1,0},{1,-1,0},{1,0,1},{1,0,-1},{1,2,0},{1,-2,0},{1,0,2},{1,0,-2},{1,1,1},{1,-1,1},{1,1,-1},{1,-1,-1},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
     },
     { // PROTECTION_SPELL
         {1,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}
@@ -393,7 +393,8 @@ uint64_t release_spell_frame = 0;
 uint64_t release_spell_anim_frames = 0;
 riv_vec2i release_spell_pos;
 uint8_t release_spell_direction;
-uint16_t n_spells = sizeof(spellbook) / sizeof(spellbook[0]);
+uint16_t n_spellbook_spells = sizeof(spellbook) / sizeof(spellbook[0]);
+uint16_t n_spells = sizeof(spells_effect_area) / sizeof(spells_effect_area[0]);
 uint16_t n_frostbite_colors;
 uint64_t last_move_frame = 0;
 uint64_t last_damage_frame = 0;
@@ -436,7 +437,7 @@ static uint8_t monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
 static uint16_t monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
 static uint8_t monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
 
-uint16_t spawn_decrease_interval = 2;
+uint16_t spawn_decrease_interval = 1;
 bool display_grid_lines = false;
 bool display_initial_help = true;
 bool display_score = true;
@@ -801,9 +802,7 @@ void end_session() {
     riv->quit_frame = riv->frame + 1*riv->target_fps;
 }
 
-uint64_t get_note_x(uint64_t sound_id, uint64_t track,uint64_t note_frame) {
-    seqt_sound *sound = seqt_get_sound(sound_id);
-
+uint64_t get_note_x(seqt_sound *sound, uint64_t track,uint64_t note_frame) {
     return note_frame % maxu(sound->source->track_sizes[track], SEQT_NOTES_COLUMNS);
 }
 
@@ -819,6 +818,7 @@ uint64_t get_note_frame(seqt_sound *sound, uint64_t frame) {
 void play_music() {
     if (!music_bpm) return;
     seqt_sound *sound = seqt_get_sound(sound_id);
+    if (!sound || !sound->source) return;
     seqt_poll_sound(sound);
     if (sound->frame >= sound->stop_frame) return;
 
@@ -842,7 +842,7 @@ void play_music() {
                 monster_types[m].notes_next_tick = 0;
             }
             for (uint64_t note_y = 0; note_y < SEQT_NOTES_ROWS; ++note_y) {
-                seqt_note note = sound->source->pages[monster_types[m].track][note_y][get_note_x(sound_id,monster_types[m].track,note_to_evaluate)];
+                seqt_note note = sound->source->pages[monster_types[m].track][note_y][get_note_x(sound,monster_types[m].track,note_to_evaluate)];
                 
                 if (note.periods > 0) {
                     monster_types[m].n_notes++;
@@ -850,7 +850,7 @@ void play_music() {
 
                 if (get_next_beat_notes) {
                     for (int ts = 0; ts < TIME_SIG; ts++) {
-                        note = sound->source->pages[monster_types[m].track][note_y][get_note_x(sound_id,monster_types[m].track,note_to_evaluate + ts)];
+                        note = sound->source->pages[monster_types[m].track][note_y][get_note_x(sound,monster_types[m].track,note_to_evaluate + ts)];
                         if (note.periods > 0) {
                             monster_types[m].notes_next_tick++;
                         }
@@ -866,10 +866,10 @@ void check_completed_spell() {
 
     completed_spell = -1;
     bool possible_spells[MAX_SPELLBOOK];
-    for (int s=0; s<n_spells; s++) possible_spells[s] = false;
+    for (int s=0; s<n_spellbook_spells; s++) possible_spells[s] = false;
 
     for (int i=0; i<MAX_CAST; i++) {
-        for (int s=0; s<n_spells; s++) {
+        for (int s=0; s<n_spellbook_spells; s++) {
             if (i == 0) {
                 if (spellbook[s][i] == cast_queue[i]) {
                     possible_spells[s] = true;
@@ -1101,7 +1101,6 @@ void update_state() {
                     board_help = true;
                 }
             }
-            moved_frames == 0;
             moved = true;
         }
     }
