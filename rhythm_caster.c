@@ -427,9 +427,9 @@ int last_item_add_beat;
 // config
 float sync_factor = 0.3;
 int starting_life_points = 10;
-int time_bonus = 1;
-int kill_bonus = 50;
-int item_bonus = 2000;
+float time_bonus = 1;
+float kill_bonus = 50;
+float item_bonus = 2000;
 static uint16_t monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
 static uint16_t monster_notes_to_move[MAX_MONSTER_TYPES] = {3,3,3,3};
 static uint8_t monster_damage[MAX_MONSTER_TYPES] = {1,1,1,1};
@@ -1256,11 +1256,11 @@ void update_state() {
     }
 
     // check spell damage
-    if (released_spell > -1 && released_spell != PROTECTION_SPELL && riv->frame > last_damage_frame + frames_per_beat) {
+    if (released_spell > -1 && riv->frame > last_damage_frame + frames_per_beat) {
 
         // spell effect area
-        int release_spell_x = release_spell_pos.x;
-        int release_spell_y = release_spell_pos.y;
+        int release_spell_x = released_spell != PROTECTION_SPELL ? release_spell_pos.x : player_base.x;
+        int release_spell_y = released_spell != PROTECTION_SPELL ? release_spell_pos.y : player_base.y;
         int release_spell_tile_x = release_spell_x/TILE_SIZE;
         int release_spell_tile_y = release_spell_y/TILE_SIZE;
 
@@ -1845,11 +1845,11 @@ int main(int argc, char* argv[]) {
             } else if (strcmp(argv[i], "-starting-life") == 0) {
                 starting_life_points = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-time-bonus") == 0) {
-                time_bonus = atoi(argv[i+1]);
+                time_bonus = strtof(argv[i+1], NULL);
             } else if (strcmp(argv[i], "-kill-bonus") == 0) {
-                kill_bonus = atoi(argv[i+1]);
+                kill_bonus = strtof(argv[i+1], NULL);
             } else if (strcmp(argv[i], "-item-bonus") == 0) {
-                item_bonus = atoi(argv[i+1]);
+                item_bonus = strtof(argv[i+1], NULL);
             } else if (strcmp(argv[i], "-spawn-decrease-interval") == 0) {
                 spawn_decrease_interval = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-display-grid-lines") == 0) {
