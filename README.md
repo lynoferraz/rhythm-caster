@@ -42,16 +42,16 @@ You can load [SeqToy](https://github.com/edubart/seqtoy) outcards as incards to 
 | -display-grid-lines | bool | 0 | Display/Hide grid lines |
 | -display-initial-help | bool | 1 | Display/Hide initial help texts |
 | -display-score | bool | 1 | Display/Hide score |
-| -monster-notes-to-spawn | int array | 40,40,40,40 | Initial number of notes to spawn monsters (for each monster type) |
-| -monster-notes-to-move | int array | 3,3,3,3 | Number of notes to move monsters (for each monster type) |
-| -monster-damage | int array | 1,1,1,1 | Damage of each monster type |
-| -monster-initial-life-points | int array | 1,1,1,1 | Monster initial life points (for each monster type) |
-| -monster-spawn-object | int array | 27,14,3,5 | Object where each monster type will spawn |
-| -monster-tracks | int array | 0,1,2,3 | Seqt track which each monster type will use |
-| -item-unlock-spell | int array | 0,1,2,3 | Item that will unlock the spell (for each spell type) |
-| -unlockable-objects | int array | 1,0,13,12,1,1,80,14,4,1,1,200,7,9,1 | When and where an object that unlocks spell will appear (active,beat_frame,x,y,obj for each object) |
-| -item-interval | int | 40 | After unlockables objects appeared, beats interval when bonus pont items appear |
-| -unlockable-objects | int array | 12,13,10,5,3,6,4,13 | After unlockables objects appeared, positions where bonus points items randomly appear |
+| -monster-notes-to-spawn | uint16 array | 40,40,40,40 | Initial number of notes to spawn monsters (for each monster type) |
+| -monster-notes-to-move | uint16 array | 3,3,3,3 | Number of notes to move monsters (for each monster type) |
+| -monster-damage | uint8 array | 1,1,1,1 | Damage of each monster type |
+| -monster-initial-life-points | uint8 array | 1,1,1,1 | Monster initial life points (for each monster type) |
+| -monster-spawn-object | uint16 array | 27,14,3,5 | Object where each monster type will spawn |
+| -monster-tracks | uint8 array | 0,1,2,3 | Seqt track which each monster type will use |
+| -item-unlock-spell | uint16 array | 0,1,2,3 | Item that will unlock the spell (for each spell type) |
+| -unlockable-objects | uint64 array | 1,0,13,12,1,1,80,14,4,1,1,200,7,9,1 | When and where an object that unlocks spell will appear (active,beat_frame,x,y,obj for each object) |
+| -item-interval | uint16 | 40 | After unlockables objects appeared, beats interval when bonus pont items appear |
+| -item-positions | int16 array | 12,13,10,5,3,6,4,13 | After unlockables objects appeared, positions where bonus points items randomly appear |
 | -spell-damage | int array | 1,1,1,2,1,1,0 | Damage of each spell type |
 | -spell-duration | float array | 2.5,2.5,2.5,1.0,0.75,4.0,16.0 | Spell duration in beats |
 

@@ -370,6 +370,7 @@ uint64_t last_beat_frame = 0;
 uint16_t frames_per_sprite = 1;
 uint32_t diff_frames = 0;
 uint64_t last_beat_frame_press = 0;
+uint64_t last_sync_frame_press = 0;
 float note_time = 0;
 float hits_per_second = 0;
 float note_period = 0;
@@ -422,9 +423,10 @@ uint16_t collected_items = 0;
 uint64_t help_frame;
 uint8_t n_unlockable_objects;
 uint16_t item_id_to_add = 30; //17
-int last_item_add_beat;
+uint64_t last_item_add_beat;
 
 // config
+int32_t sync_frames = 0;
 float sync_factor = 0.3;
 int starting_life_points = 10;
 float time_bonus = 1;
@@ -441,8 +443,9 @@ uint16_t spawn_decrease_interval = 1;
 bool display_grid_lines = false;
 bool display_initial_help = true;
 bool display_score = true;
+bool display_starting_sync = true;
 
-static int unlockable_objects[MAX_UNLOCKABLE_ITEMS][5] = { // active,beat_frame,x,y,obj
+static uint64_t unlockable_objects[MAX_UNLOCKABLE_ITEMS][5] = { // active,beat_frame,x,y,obj
     {1,0,13,12,1},
     {1,80,14,4,1},
     {1,200,7,9,1},
@@ -453,8 +456,8 @@ static int unlockable_objects[MAX_UNLOCKABLE_ITEMS][5] = { // active,beat_frame,
     {0,0,0,0,0},
 }; 
 
-int item_interval = 40;
-static int item_positions[MAX_ITEM_POSITIONS][2] = { // active,beat_frame,x,y,obj
+uint16_t item_interval = 40;
+static int16_t item_positions[MAX_ITEM_POSITIONS][2] = { // active,beat_frame,x,y,obj
     {12,13},
     {10,5},
     {3,6},
@@ -635,15 +638,7 @@ void initialize() {
     wizard_sps = riv_make_spritesheet(riv_make_image("wizard-spritesheet-53.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
     tileset_sps = riv_make_spritesheet(riv_make_image("tileset.png", 255), TILE_SIZE, TILE_SIZE);
 
-    // initialize monsters
-    initialize_monsters();
-
-    update_score();
-}
-
-void start_game() {
-    started = true;
-    start_frame = riv->frame;
+    // initialize sound variables
     hits_per_second = music_bpm*((1.0*TIME_SIG)/60);
     note_period = hits_per_second/riv->target_fps;
     frames_per_beat = riv->target_fps/(music_bpm/60.0);
@@ -652,10 +647,25 @@ void start_game() {
     sync_hit = frames_per_beat * sync_factor;
     moving_frames = (int)ceil(frames_per_beat / 4);
     speed = (int)ceil((1.0*TILE_SIZE)/moving_frames);
+
+    sync_frames = clamp(sync_frames,-sync_hit,sync_hit);
+
+    update_score();
+}
+
+void start_game() {
+    // initialize monsters
+    initialize_monsters();
+
+    started = true;
+    start_frame = riv->frame;
     last_beat_frame_press = 0;
+    last_sync_frame_press = 0;
+    last_note_frame = -1;
+    note_time = 0;
 
     diff_frames = 0;
-    last_beat_frame = 0;
+    last_beat_frame = riv->frame;
     last_move_frame = 0;
 
     // release_spell_anim_frames = (int)ceil(frames_per_beat * 6 / 4);
@@ -791,6 +801,7 @@ void start_game() {
     life_points = starting_life_points;
 
     seqt_set_start(sound_id,(4.0*frames_per_beat)/riv->target_fps);
+    seqt_seek(sound_id,0);
 
     // riv_printf("START\n");
 }
@@ -902,6 +913,24 @@ void random_wait() {
 ////
 // Update functions
 
+void update_starting_screen() {
+    play_music();
+    if (riv->keys[RIV_GAMEPAD_L1].press) {
+        sync_frames++;
+        sync_frames = clamp(sync_frames,-sync_hit,sync_hit);
+    } else if (riv->keys[RIV_GAMEPAD_R1].press) {
+        sync_frames--;
+        sync_frames = clamp(sync_frames,-sync_hit,sync_hit);
+    }
+    diff_frames = riv->frame - last_beat_frame;
+    bool in_sync_frame = diff_frames + sync_frames < sync_hit || diff_frames + sync_frames > frames_per_beat - sync_hit;
+
+    if (in_sync_frame && (riv->keys[RIV_GAMEPAD_RIGHT].press || riv->keys[RIV_GAMEPAD_LEFT].press || 
+                riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
+        last_sync_frame_press = riv->frame;
+    }
+}
+
 void update_state() {
     if (riv->keys[RIV_GAMEPAD1_SELECT].press) {
         end_session();
@@ -910,13 +939,14 @@ void update_state() {
     play_music();
 
     diff_frames = riv->frame - last_beat_frame;
-    bool in_sync_frame = diff_frames < sync_hit || diff_frames > frames_per_beat - sync_hit;
+    bool in_sync_frame = diff_frames + sync_frames < sync_hit || diff_frames + sync_frames > frames_per_beat - sync_hit;
     uint64_t sync_beat_frame = last_beat_frame;
     if (diff_frames > frames_per_beat - sync_hit) sync_beat_frame = last_beat_frame + frames_per_beat;
 
-    // Add crystal
+    // Add item/crystal
     if (!diff_frames) {
-        int beat = last_note_frame/TIME_SIG;
+        uint64_t beat = last_note_frame/TIME_SIG;
+        riv_printf("frame %d beat %d\n",riv->frame,beat);
         if (collected_items < n_unlockable_objects) {
             for (int i=0;i<n_unlockable_objects;++i) {
                 // add obj
@@ -985,6 +1015,7 @@ void update_state() {
                 riv->keys[RIV_GAMEPAD_DOWN].press || riv->keys[RIV_GAMEPAD_UP].press)) {
         key_press = true;
         last_beat_frame_press = sync_beat_frame;
+        last_sync_frame_press = riv->frame;
     }
 
     // check casting
@@ -1325,19 +1356,6 @@ void update_state() {
 ////
 // Draw functions
 
-void draw_start_screen() {
-    // cover
-    riv_draw_image_rect(cover_image,0,0,SCREEN_SIZE,SCREEN_SIZE,0,0,1,1);
-
-    // Draw title
-    riv_draw_text("Rhythm Spell Caster",RIV_SPRITESHEET_FONT_5X7,RIV_TOP,SCREEN_SIZE/2+2,22,2,RIV_COLOR_DARKGREEN);
-    riv_draw_text("Rhythm Spell Caster",RIV_SPRITESHEET_FONT_5X7,RIV_TOP,SCREEN_SIZE/2,20,2,RIV_COLOR_LIGHTGREEN);
-    // Make "press to start blink" by changing the color depending on the frame number
-    uint32_t col = ((riv->frame / 15) % 2 == 0) ? RIV_COLOR_YELLOW : RIV_COLOR_LIGHTYELLOW;
-    // Draw press to start
-    riv_draw_text("PRESS TO START", RIV_SPRITESHEET_FONT_5X7, RIV_BOTTOM, SCREEN_SIZE/2, SCREEN_SIZE-32, 1, col);
-}
-
 void draw_beat_guide() {
 
     uint32_t dx = diff_frames;
@@ -1352,11 +1370,31 @@ void draw_beat_guide() {
     for (int i=0; i<BEAT_TICKS/2; i++)  {
         riv_draw_rect_fill(delta_x + i * SCREEN_SIZE/BEAT_TICKS,SCREEN_SIZE - 1.5 * TILE_SIZE, 2, TILE_SIZE, RIV_COLOR_SLATE);
     }
-
-    riv_draw_rect_fill(SCREEN_SIZE/2 - TILE_SIZE/2 + dx/2,SCREEN_SIZE - 1.5 * TILE_SIZE, TILE_SIZE - dx, TILE_SIZE, RIV_COLOR_SLATE);
+    uint32_t color = last_beat_frame < last_sync_frame_press + sync_hit 
+        ? RIV_COLOR_LIGHTSLATE : RIV_COLOR_SLATE;
+    riv_draw_rect_fill(SCREEN_SIZE/2 - TILE_SIZE/2 + dx/2,SCREEN_SIZE - 1.5 * TILE_SIZE, TILE_SIZE - dx, TILE_SIZE, color);
     riv_draw_rect_fill(SCREEN_SIZE/2 - 1,SCREEN_SIZE - 1.5 * TILE_SIZE, 2, TILE_SIZE, RIV_COLOR_LIGHTSLATE);
 }
 
+void draw_start_screen() {
+    // cover
+    riv_draw_image_rect(cover_image,0,0,SCREEN_SIZE,SCREEN_SIZE,0,0,1,1);
+
+    // Draw title
+    riv_draw_text("Rhythm Spell Caster",RIV_SPRITESHEET_FONT_5X7,RIV_TOP,SCREEN_SIZE/2+2,22,2,RIV_COLOR_DARKGREEN);
+    riv_draw_text("Rhythm Spell Caster",RIV_SPRITESHEET_FONT_5X7,RIV_TOP,SCREEN_SIZE/2,20,2,RIV_COLOR_LIGHTGREEN);
+    // Make "press to start blink" by changing the color depending on the frame number
+    uint32_t col = ((riv->frame / 15) % 2 == 0) ? RIV_COLOR_YELLOW : RIV_COLOR_LIGHTYELLOW;
+    // Draw press to start
+    riv_draw_text("PRESS A1 TO START", RIV_SPRITESHEET_FONT_5X7, RIV_BOTTOM, SCREEN_SIZE/2, SCREEN_SIZE-2*TILE_SIZE, 1, col);
+    if (display_starting_sync) {
+        draw_beat_guide();
+
+        char buf[128];
+        riv_snprintf(buf, sizeof(buf), "Sync: %d",sync_frames);
+        riv_draw_text(buf, RIV_SPRITESHEET_FONT_3X5, RIV_BOTTOMRIGHT, SCREEN_SIZE-2,SCREEN_SIZE-TILE_SIZE/2, 2, RIV_COLOR_WHITE);
+    }
+}
 
 void draw_cast_moves() {
 
@@ -1790,8 +1828,10 @@ void draw_stats() {
 void update() {
     if (!wait) { // Game not started yet
         // Let game start whenever a key has been pressed
-        if (riv->key_toggle_count > 0) {
+        if (riv->keys[RIV_GAMEPAD_A1].press || riv->keys[RIV_GAMEPAD_A2].press || riv->keys[RIV_GAMEPAD_START].press) {
             random_wait();
+        } else {
+            update_starting_screen();
         }
     } else if (!started) { // waiting
         if (riv->frame > random_wait_frame) {
@@ -1858,6 +1898,8 @@ int main(int argc, char* argv[]) {
                 display_initial_help = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-display-score") == 0) {
                 display_score = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-display-starting-sync") == 0) {
+                display_starting_sync = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-monster-notes-to-spawn") == 0) {
                 char *token = strtok(argv[i+1], delim);
                 for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
