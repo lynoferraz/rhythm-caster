@@ -33,9 +33,11 @@ You can load [SeqToy](https://github.com/edubart/seqtoy) outcards as incards to 
 | Argument | Type | Default Value | Description |
 | - | - | - | - |
 | -fps | int | 30 | Frames per second |
+| -tutorial-lock | bool | 1 | Lock gameplay until it has moved in synch |
 | -sync-factor | float | 0.3 | Sync window to hit key |
 | -starting-life | int | 10 | Starting life points |
-| -time-bonus | float | 1 | Score bonus per second |
+| -starting-score | int | 100 | Starting score |
+| -time-multiplier | float | -1 | Score bonus per second |
 | -kill-bonus | float | 1 | Score bonus per kill |
 | -item-bonus | float | 1 | Score bonus per items |
 | -spawn-decrease-interval | uint16 | 1 | Number of notes to decrease untill next monster spawn |
