@@ -21,13 +21,14 @@ enum {
     POSSIBLE_CAST_Y = 27*TILE_SIZE/2,
     POSSIBLE_LEFT_X = TILE_SIZE,
 
-    MAP_PLAYER_GROUND = 0,
+    MAP_LAYER_GROUND = 0,
     MAP_LAYER_BLOCKABLE = 1,
     MAP_LAYER_ITEMS = 2,
     MAP_LAYER_DECORATIONS = 3,
     // MAP_LAYER_MONSTERS = 4,
     MAP_LAYER_TOP = 4,
     MAP_LAYERS = 5,
+    MAX_MAPS = 10,
 
     TIME_SIG = 4,
 
@@ -52,11 +53,13 @@ enum {
 
     HEAD_COLORS = 4,
 
-    MAX_MONSTER_TYPES = 4,
+    MAX_MONSTER_TYPES = 10,
+    MAX_MONSTER_CONFIGS = 30,
     MAX_MONSTERS = 4096,
     MAX_UNLOCKABLE_ITEMS = 8,
     MAX_ITEM_POSITIONS = 4,
     ERROS_TO_DISPLAY_HELP = 3,
+    NEW_LEVEL_ANIM_SECS = 3,
 };
 
 enum {
@@ -176,7 +179,7 @@ typedef struct MonsterType {
     uint32_t damage;
     uint32_t notes_to_move;
     uint32_t notes_next_tick;
-    int16_t spawn_object;
+    uint32_t decrease_notes;
     int16_t initial_life_points;
     int16_t damage_color;
     uint8_t track;
@@ -200,98 +203,107 @@ typedef struct Monster {
 int message_row_dist = SCREEN_SIZE / N_MESSAGE_ROWS;
 
 // map
-static int16_t map[MAP_LAYERS][MAP_SIZE][MAP_SIZE] = {
-    {
-        {182,182,182,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,182,182,182,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,212,223,223,223,223,223,223,223,-1,-1,-1,-1,},
-        {-1,222,223,224,225,238,238,238,238,238,238,238,227,228,229,-1,},
-        {-1,235,238,192,238,238,205,238,238,192,238,238,238,238,242,-1,},
-        {-1,235,238,238,238,238,238,238,238,238,238,238,238,238,242,-1,},
-        {-1,235,238,192,238,192,238,238,238,238,206,238,238,238,242,-1,},
-        {-1,235,238,238,238,238,238,238,238,238,193,238,238,238,242,-1,},
-        {-1,235,238,238,219,238,238,238,238,238,193,193,193,238,242,-1,},
-        {-1,235,238,238,238,238,238,238,238,238,238,238,193,193,242,-1,},
-        {-1,235,238,238,238,192,238,238,238,238,238,238,238,238,242,-1,},
-        {-1,235,238,238,205,238,238,238,238,193,238,238,238,238,242,-1,},
-        {-1,235,218,238,238,238,238,238,238,238,238,238,238,238,242,-1,},
-        {-1,235,238,238,238,238,238,238,238,238,238,238,238,238,242,-1,},
-        {-1,-1,-1,-1,252,251,252,252,252,252,252,252,-1,-1,-1,-1,},
-        {182,182,182,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,182,182,182,},
-    },
-    {
-        {-1,-1,-1,185,186,197,197,231,186,232,233,197,188,-1,-1,-1,},
-        {195,196,197,198,199,210,210,244,199,245,246,210,201,202,203,204,},
-        {208,209,210,211,-1,-1,-1,-1,-1,-1,-1,3,214,215,216,217,},
-        {221,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,230,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,19,-1,-1,-1,-1,0,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,5,-1,-1,-1,14,-1,-1,243,},
-        {234,-1,-1,19,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {234,-1,-1,-1,-1,-1,27,-1,-1,-1,-1,-1,-1,-1,-1,243,},
-        {247,248,249,250,-1,-1,-1,-1,-1,-1,-1,-1,253,254,255,256,},
-        {-1,-1,-1,263,265,264,265,265,265,265,265,265,266,-1,-1,-1,},
-    },
-    {
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-    },
-    {
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,40,-1,32,-1,-1,-1,-1,-1,-1,-1,-1,45,40,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-    },
-    {
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,6,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,6,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
-    }
-};
+
+typedef int16_t Map[MAP_LAYERS][MAP_SIZE][MAP_SIZE];
+
+static Map maps[MAX_MAPS] =
+#include "maps.h"
+
+// static int16_t map[MAP_LAYERS][MAP_SIZE][MAP_SIZE] = {
+//     {
+//         {182,182,182,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,182,182,182,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,212,223,223,223,223,223,223,223,-1,-1,-1,-1,},
+//         {-1,222,223,224,225,238,238,238,238,238,238,238,227,228,229,-1,},
+//         {-1,235,238,192,238,238,205,238,238,192,238,238,238,238,242,-1,},
+//         {-1,235,238,238,238,238,238,238,238,238,238,238,238,238,242,-1,},
+//         {-1,235,238,192,238,192,238,238,238,238,206,238,238,238,242,-1,},
+//         {-1,235,238,238,238,238,238,238,238,238,193,238,238,238,242,-1,},
+//         {-1,235,238,238,219,238,238,238,238,238,193,193,193,238,242,-1,},
+//         {-1,235,238,238,238,238,238,238,238,238,238,238,193,193,242,-1,},
+//         {-1,235,238,238,238,192,238,238,238,238,238,238,238,238,242,-1,},
+//         {-1,235,238,238,205,238,238,238,238,193,238,238,238,238,242,-1,},
+//         {-1,235,218,238,238,238,238,238,238,238,238,238,238,238,242,-1,},
+//         {-1,235,238,238,238,238,238,238,238,238,238,238,238,238,242,-1,},
+//         {-1,-1,-1,-1,252,251,252,252,252,252,252,252,-1,-1,-1,-1,},
+//         {182,182,182,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,182,182,182,},
+//     },
+//     {
+//         {-1,-1,-1,185,186,197,197,231,186,232,233,197,188,-1,-1,-1,},
+//         {195,196,197,198,199,210,210,244,199,245,246,210,201,202,203,204,},
+//         {208,209,210,211,-1,-1,-1,-1,-1,-1,-1,3,214,215,216,217,},
+//         {221,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,230,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,19,-1,-1,-1,-1,0,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,5,-1,-1,-1,14,-1,-1,243,},
+//         {234,-1,-1,19,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {234,-1,-1,-1,-1,-1,27,-1,-1,-1,-1,-1,-1,-1,-1,243,},
+//         {247,248,249,250,-1,-1,-1,-1,-1,-1,-1,-1,253,254,255,256,},
+//         {-1,-1,-1,263,265,264,265,265,265,265,265,265,266,-1,-1,-1,},
+//     },
+//     {
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//     },
+//     {
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,40,-1,32,-1,-1,-1,-1,-1,-1,-1,-1,45,40,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//     },
+//     {
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,6,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,6,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//         {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,},
+//     }
+// };
+
+uint32_t n_levels = 3;
+// bool imported_levels = false;
 
 static int arrows_positions[4][6] = {
     {0,0,  20,0, 10,20},
@@ -397,13 +409,13 @@ int cover_image;
 
 bool started = false;
 bool ended = false;
-bool about_to_end = false;
 bool help_screen = false;
 int start_frame;
 uint64_t total_frames = 0;
+uint64_t new_level_frame = 0;
+bool new_level = false;
 
 bool lock_gameplay = true;
-uint16_t music_bpm = 0;
 int last_note_frame = -1;
 uint64_t last_beat_frame = 0;
 uint16_t frames_per_sprite = 1;
@@ -455,25 +467,32 @@ int16_t life_points = 1;
 uint8_t protection_circles;
 uint16_t beat_sequence_errors = 0;
 uint16_t beat_sequence_hits = 0;
+uint32_t current_level = 0;
+uint16_t imported_sounds = 0;
+uint16_t imported_maps = 0;
 
 int score;
 
-uint64_t sound_id = 1;
+uint64_t sound_id = 0;
 
 static MonsterType monster_types[MAX_MONSTER_TYPES];
 static Monster monsters[MAX_MONSTERS];
 uint8_t n_monster_types = 0;
 uint16_t n_monsters = 0;
-static uint8_t monster_ssids[MAX_MONSTER_TYPES];
+uint16_t level_killed_monsters = 0;
+static uint8_t monster_ssids[MAX_MONSTER_CONFIGS];
 
 // items
 // bool board_help;
 int item_help;
-uint16_t collected_items = 0;
+uint16_t total_collected_items = 0;
+uint16_t unlock_collected_items = 0;
+uint16_t level_collected_items = 0;
+uint16_t level_objects = 0;
 uint64_t help_frame;
 uint64_t error_help_frame;
 uint64_t good_help_frame;
-uint8_t n_unlockable_objects;
+uint8_t level_unlockable_objects;
 uint16_t item_id_to_add = 30; //17
 uint64_t last_item_add_beat;
 
@@ -485,12 +504,42 @@ int starting_score = 100;
 float time_mult = -1;
 float kill_bonus = 50;
 float item_bonus = 2000;
-static uint16_t monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
-static uint16_t monster_notes_to_move[MAX_MONSTER_TYPES] = {3,3,3,3};
-static uint8_t monster_damage[MAX_MONSTER_TYPES] = {1,1,1,1};
-static uint8_t monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
-static uint16_t monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
-static uint8_t monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
+float level_bonus = 10000;
+// static uint16_t monster_notes_to_spawn[MAX_MONSTER_TYPES] = {40,40,40,40};
+// static uint16_t monster_notes_to_move[MAX_MONSTER_TYPES] = {3,3,3,3};
+// static uint8_t monster_damage[MAX_MONSTER_TYPES] = {1,1,1,1};
+// static uint8_t monster_initial_life_points[MAX_MONSTER_TYPES] = {1,1,1,1};
+// static uint16_t monster_spawn_object[MAX_MONSTER_TYPES] = {27,14,3,5};
+// static uint8_t monster_tracks[MAX_MONSTER_TYPES] = {0,1,2,3};
+
+static uint16_t max_level_monsters[MAX_MAPS] = {30,50,200};
+
+static uint32_t monsters_config[MAX_MONSTER_CONFIGS][11] = { 
+    // active, level, ssid, track, notes_to_spawn, monster_notes_to_move, decrease interval
+    //      spawn x, spawn y,
+    //      monster_damage, monster_initial_life_points
+    {1,0,8,0,40,3,1,11,5,1,1},
+    {1,0,3,1,40,3,1,5,14,1,1},
+    {1,0,5,1,60,3,0,3,4,1,2},
+    {1,1,9,2,60,3,0,13,14,4,4},
+    {1,1,4,3,40,3,2,3,11,2,1},
+    {1,1,7,1,30,3,2,13,6,1,1},
+    {1,2,0,0,40,3,1,4,2,2,1},
+    {1,2,2,1,60,3,1,11,2,1,2},
+    {1,2,1,2,20,3,1,12,9,1,1},
+    {1,2,6,3,80,3,0,8,9,5,7},
+};
+
+// 0 - snake
+// 1 - slime
+// 2 - mouse
+// 3 - frog
+// 4 - bat
+// 5 - monkey
+// 6 - wolf
+// 7 - bug
+// 8 - crow
+// 9 - fox
 
 uint16_t spawn_decrease_interval = 1;
 bool display_grid_lines = false;
@@ -498,32 +547,36 @@ bool display_initial_help = true;
 bool display_score = true;
 bool display_starting_sync = true;
 
-static uint64_t unlockable_objects[MAX_UNLOCKABLE_ITEMS][5] = { // active,beat_frame,x,y,obj
-    {1,0,13,12,1},
-    {1,80,14,4,1},
-    {1,200,7,9,1},
-    {1,500,6,14,13},
-    {0,0,0,0,0},
-    {0,0,0,0,0},
-    {0,0,0,0,0},
-    {0,0,0,0,0},
+static uint32_t unlockable_objects[MAX_UNLOCKABLE_ITEMS][6] = { // active,level,beat_frame,x,y,obj
+    {1,0,0,2,13,1},
+    {1,1,0,5,14,1},
+    {1,1,120,8,2,1},
+    {1,2,0,13,12,1},
+    {1,2,120,14,5,1},
+    {1,2,300,7,10,13},
 };
 
-uint16_t item_interval = 40;
-static int16_t item_positions[MAX_ITEM_POSITIONS][2] = { // active,beat_frame,x,y,obj
-    {12,13},
-    {10,5},
-    {3,6},
-    {4,13},
+static uint32_t bonus_objects[MAX_MAPS][2] = { // interval,max
+    {120,3},
+    {120,5},
+    {120,10},
 };
+
+static uint32_t initial_positions[MAX_MAPS][2] = { // interval,max
+    {7,1},
+    {15,8},
+    {7,8},
+};
+
+static uint64_t map_sounds[MAX_MAPS] = {2,1,3};
 
 static uint16_t spell_damage[] = {
     1, //FROSTBITE1_SPELL,
     1, //FROSTBITE2_SPELL,
     1, //FROSTBITE3_SPELL,
-    2, //FIREBALL_SPELL,
-    1, //WINDSLASH_SPELL,
-    1, //NOVA_SPELL,
+    3, //FIREBALL_SPELL,
+    2, //WINDSLASH_SPELL,
+    2, //NOVA_SPELL,
     1, //PROTECTION_SPELL,
     1, //SECRET_SPELL,
 };
@@ -531,12 +584,12 @@ static uint16_t spell_damage[] = {
 static int16_t item_unlock_spell[] = {
     0, //FROSTBITE1_SPELL,
     1, //FROSTBITE2_SPELL,
-    2, //FROSTBITE3_SPELL,
-    1, //FIREBALL_SPELL,
+    3, //FROSTBITE3_SPELL,
+    4, //FIREBALL_SPELL,
     2, //WINDSLASH_SPELL,
-    3, //NOVA_SPELL,
+    5, //NOVA_SPELL,
     0, //PROTECTION_SPELL,
-    4, //SECRET_SPELL,
+    6, //SECRET_SPELL,
 };
 static float spell_beats_duration[] = {
     3.0, //FROSTBITE1_SPELL,
@@ -565,11 +618,11 @@ static bool unlocked_spells[] = {
 
 int64_t clamp(int64_t v, int64_t min, int64_t max) { v = v < min ? min : v; v = v > max ? max : v; return v; }
 
-int16_t collides_with_layer(riv_vec2i pos, int l) {
+int16_t collides_with_layer(uint16_t level, riv_vec2i pos, int l) {
     int y = pos.y / TILE_SIZE;
     int x = pos.x / TILE_SIZE;
-    if (map[l][y][x] > 0) {
-        return map[l][y][x];
+    if (maps[level][l][y][x] > 0) {
+        return maps[level][l][y][x];
     }
     return 0;
 }
@@ -580,46 +633,90 @@ void initialize_monsters() {
     monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/slime.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
     monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/mouse.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
     monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/frog.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/bat.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/monkey.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/wolf.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/bug.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/crow.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+    monster_ssids[ssid++] = riv_make_spritesheet(riv_make_image("images/fox.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
+}
 
-    for(int m = 0; m < MAX_MONSTER_TYPES; m++) {
-        if (monster_notes_to_spawn[m] > 0) {
-            MonsterType *mt = &monster_types[n_monster_types];
-            mt->ssid = monster_ssids[m];
-            mt->track = monster_tracks[m];
-            mt->notes_to_spawn = monster_notes_to_spawn[m];
-            mt->notes_to_move = monster_notes_to_move[m];
-            mt->n_notes = 0;
-            mt->n_spawned = 0;
-            mt->n_killed = 0;
-            mt->damage = monster_damage[m];
-            mt->initial_life_points = monster_initial_life_points[m];
-            mt->spawn_object = monster_spawn_object[m];
-            mt->spawn_point.x = -1;
-            mt->spawn_point.y = -1;
-            n_monster_types++;
+void initialize_level_monsters() {
+    n_monster_types = 0;
 
-            int sps_width = riv->images[monster_ssids[m]].width;
-            uint8_t color_count[256];
-            for (uint8_t i=0; i<255; i++) color_count[i] = 0;
-            for (uint32_t i=0; i<riv->spritesheets[monster_ssids[m]].cell_height; i++)  {
-                for (uint32_t j=0; j<riv->spritesheets[monster_ssids[m]].cell_width; j++)  {
-                    uint8_t color = *(riv->images[riv->spritesheets[monster_ssids[m]].image_id].pixels + j + i*sps_width);
-                    color_count[color]++;
+    for(int m = 0; m < MAX_MONSTER_CONFIGS; m++) {
+        if (monsters_config[m][0] > 0) {
+            if (monsters_config[m][1] == current_level) {
+                // active, level, ssid, track, notes_to_spawn, monster_notes_to_move, decrease interval
+                //      spawn x, spawn y,
+                //      monster_damage, monster_initial_life_points
+                MonsterType *mt = &monster_types[n_monster_types];
+                mt->ssid = monster_ssids[monsters_config[m][2]];
+                mt->track = monsters_config[m][3];
+                mt->notes_to_spawn = monsters_config[m][4];
+                mt->notes_to_move = monsters_config[m][5];
+                mt->decrease_notes = monsters_config[m][6];
+                mt->n_notes = 0;
+                mt->n_spawned = 0;
+                mt->n_killed = 0;
+                mt->damage = monsters_config[m][9];
+                mt->initial_life_points = monsters_config[m][10];
+
+                // monsters bbox
+                int minx = CHARACTER_SIZE;
+                int maxw = 0;
+                int miny = CHARACTER_SIZE;
+                int maxh = 0;
+
+                for (int i=0; i<32; i++)  {
+                    riv_recti r = riv_get_sprite_bbox(i,mt->ssid,1,1);
+                    if (r.x < minx) minx = r.x;
+                    if (r.width > maxw) maxw = r.width;
+                    if (r.y < miny) miny = r.y;
+                    if (r.height > maxh) maxh = r.height;
                 }
+                if (minx + maxw > CHARACTER_SIZE) maxw = CHARACTER_SIZE - minx;
+                if (miny+maxh > CHARACTER_SIZE) maxh = CHARACTER_SIZE - miny;
+                minx = minx + maxw/2 - TILE_SIZE/2;
+                maxw = TILE_SIZE;
+
+                mt->bbox.x = minx;
+                mt->bbox.y = miny+maxh-maxw;
+                mt->bbox.width = maxw;
+                mt->bbox.height = maxw;
+
+                // spawn point
+                mt->spawn_point.x = monsters_config[m][7]*TILE_SIZE - mt->bbox.x + (TILE_SIZE-mt->bbox.width)/2;
+                mt->spawn_point.y = monsters_config[m][8]*TILE_SIZE - mt->bbox.y + (TILE_SIZE-mt->bbox.height)/2;
+
+                // damage color
+                int sps_width = riv->images[monster_ssids[m]].width;
+                uint8_t color_count[256];
+                for (uint8_t i=0; i<255; i++) color_count[i] = 0;
+                for (uint32_t i=0; i<riv->spritesheets[monster_ssids[m]].cell_height; i++)  {
+                    for (uint32_t j=0; j<riv->spritesheets[monster_ssids[m]].cell_width; j++)  {
+                        uint8_t color = *(riv->images[riv->spritesheets[monster_ssids[m]].image_id].pixels + j + i*sps_width);
+                        color_count[color]++;
+                    }
+                }
+                int16_t freq_color1 = -1;
+                int16_t freq_color2 = -1;
+                for (uint8_t i=0; i<255; i++) {
+                    if (freq_color1 == -1 || color_count[i] > color_count[freq_color1]) {
+                        freq_color2 = freq_color1;
+                        freq_color1 = i;
+                        continue;
+                    }
+                    if (freq_color2 == -1 || color_count[i] > color_count[freq_color2]) {
+                        freq_color2 = i;
+                    }
+                }
+                mt->damage_color = freq_color2;
+
+                n_monster_types++;
             }
-            int16_t freq_color1 = -1;
-            int16_t freq_color2 = -1;
-            for (uint8_t i=0; i<255; i++) {
-                if (freq_color1 == -1 || color_count[i] > color_count[freq_color1]) {
-                    freq_color2 = freq_color1;
-                    freq_color1 = i;
-                    continue;
-                }
-                if (freq_color2 == -1 || color_count[i] > color_count[freq_color2]) {
-                    freq_color2 = i;
-                }
-            }
-            mt->damage_color = freq_color2;
+        } else {
+            break;
         }
     }
 }
@@ -630,15 +727,11 @@ void read_incard_data(uint8_t *data,int from) {//,int size) {
     magic[MAGIC_SIZE] = '\0';
     // riv_printf("MAGIC: %s\n",magic);
     if (!strcmp(magic,"SEQT")) {
-        if (music_bpm) {
-            return;
-        }
-        seqt_init();
         // music_bpm = music->bpm;
-        seqt_play((seqt_source*)(data + from),-1);
-        seqt_sound *sound = &seqt.sounds[1];
+        if (seqt_play((seqt_source*)(data + from),-1)) {
+            imported_sounds++;
+        }
         // seqt_source* music = sound->source;
-        music_bpm = sound->source->bpm;
 
         // music = (Music)(data + from);
 
@@ -657,6 +750,20 @@ void read_incard_data(uint8_t *data,int from) {//,int size) {
     //     wizard_sps = riv_make_spritesheet(riv_make_image("wizard-spritesheet-53.png", 255), CHARACTER_SIZE, CHARACTER_SIZE);
     //     spng_ctx_free(ctx);
 
+    } else if (!strcmp(magic,"RCMP")) {
+        if (imported_maps < MAX_MAPS) {
+            uint64_t i = 4;
+            for (int l=0;l<MAP_LAYERS;++l) {
+                for (int y=0;y<MAP_SIZE;++y) {
+                    for (int x=0;x<MAP_SIZE;++x) {
+                        int16_t v = ((int16_t)data[i+1] << 8) + data[i];
+                        maps[imported_maps][l][y][x] = v;
+                        i += 2;
+                    }
+                }
+            }
+            imported_maps++;
+        }
     } else if (!strcmp(magic,"MICS")) {
         int wi = from + MAGIC_SIZE; // curr_word_index
 
@@ -681,11 +788,15 @@ void read_incard_data(uint8_t *data,int from) {//,int size) {
 }
 
 void update_score() {
-    score = starting_score + (time_mult*total_frames)/riv->target_fps + item_bonus*collected_items +  kill_bonus*(monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed);
+    score = starting_score + (time_mult*total_frames)/riv->target_fps + level_bonus*current_level + 
+        item_bonus*total_collected_items + 
+        kill_bonus*(monster_types[0].n_killed+monster_types[1].n_killed+monster_types[2].n_killed+monster_types[3].n_killed +
+            monster_types[4].n_killed + monster_types[5].n_killed + monster_types[6].n_killed + monster_types[7].n_killed + 
+            monster_types[8].n_killed + monster_types[9].n_killed);
     riv->outcard_len = riv_snprintf((char*)riv->outcard, RIV_SIZE_OUTCARD,
-        "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"collected_items\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d}",
-        score,total_frames, life_points<=0,life_points,collected_items,
-        monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed
+        "JSON{\"score\":%d,\"frame\":%d,\"dead\":%d,\"life_points\":%d,\"collected_items\":%d,\"kills_0\":%d,\"kills_1\":%d,\"kills_2\":%d,\"kills_3\":%d,\"kills_4\":%d,\"kills_5\":%d,\"kills_6\":%d,\"kills_7\":%d,\"kills_8\":%d,\"kills_9\":%d}",
+        score,total_frames, life_points<=0,life_points,total_collected_items,
+        monster_types[0].n_killed,monster_types[1].n_killed,monster_types[2].n_killed,monster_types[3].n_killed,monster_types[4].n_killed,monster_types[5].n_killed,monster_types[6].n_killed,monster_types[7].n_killed,monster_types[8].n_killed,monster_types[9].n_killed
     );
 
     // if (riv->frame%riv->target_fps==0)
@@ -697,15 +808,23 @@ void update_score() {
 
 void initialize() {
 
+    seqt_init();
     if (riv->incard_len > 0) {
         read_incard_data(riv->incard,0);//,riv->incard_len);
     }
 
-    if (!music_bpm) {
-        seqt_init();
+    if (!imported_sounds) {
         seqt_play(seqt_make_source_from_file("incards/seq02_lyno.rivcard"), -1);
-        seqt_sound *sound = &seqt.sounds[1];
-        music_bpm = sound->source->bpm;
+        imported_sounds++;
+        seqt_play(seqt_make_source_from_file("incards/seq03_lyno.rivcard"), -1);
+        imported_sounds++;
+        seqt_play(seqt_make_source_from_file("incards/seq04_lyno.rivcard"), -1);
+        imported_sounds++;
+    }
+    sound_id = clampu(1,1,imported_sounds);
+
+    if (imported_maps) {
+        n_levels = clampu(n_levels,1,imported_maps);
     }
 
     cover_image = riv_make_image("images/wizard_cover_palette-384.png", 255);
@@ -715,9 +834,10 @@ void initialize() {
     tileset_sps = riv_make_spritesheet(riv_make_image("images/tileset.png", 255), TILE_SIZE, TILE_SIZE);
 
     // initialize sound variables
-    hits_per_second = music_bpm*((1.0*TIME_SIG)/60);
+    seqt_sound *sound = &seqt.sounds[sound_id & (SEQT_MAX_SOUNDS-1)];
+    hits_per_second = sound->source->bpm*((1.0*TIME_SIG)/60);
     note_period = hits_per_second/riv->target_fps;
-    frames_per_beat = riv->target_fps/(music_bpm/60.0);
+    frames_per_beat = riv->target_fps/(sound->source->bpm/60.0);
     frames_per_sprite = frames_per_beat / CHARACTER_ANIM_SPRITES;
     beat_guide_tick_size = (SCREEN_SIZE / BEAT_TICKS) / frames_per_beat;
     sync_hit = frames_per_beat * sync_factor;
@@ -726,31 +846,20 @@ void initialize() {
     cast_hit_anim_frames = riv->target_fps/CAST_HIT_ANIM_FPS_FRACTION;
     damage_anim_frames = riv->target_fps/DAMAGE_ANIM_FPS_FRACTION;
     life_anim_frames = riv->target_fps/LIFE_DAMAGE_ANIM_FPS_FRACTION;
-
     sync_frames = clamp(sync_frames,-sync_hit,sync_hit);
 
     update_score();
 }
 
+void end_session() {
+    ended = true;
+    update_score();
+    // Quit in 2 seconds
+    riv->quit_frame = riv->frame + 1*riv->target_fps;
+}
+
 void start_game() {
-    // initialize monsters
     initialize_monsters();
-
-    started = true;
-    start_frame = riv->frame;
-    total_frames = 0;
-    last_beat_frame_press = 0;
-    last_sync_frame_press = 0;
-    last_out_of_sync_frame_press = 0;
-    last_note_frame = -1;
-    note_time = 0;
-    gameplay_beats = -1;
-
-    diff_frames = 0;
-    last_beat_frame = riv->frame;
-    last_move_frame = 0;
-
-    // release_spell_anim_frames = (int)ceil(frames_per_beat * 6 / 4);
 
     int minx = CHARACTER_SIZE;
     int maxw = 0;
@@ -773,22 +882,6 @@ void start_game() {
     wizard_bbox.y = miny+maxh-maxw;
     wizard_bbox.width = maxw;
     wizard_bbox.height = maxw;
-    int start_x = 4;
-    int start_y = 6;
-    // for (int x=3; start_x < 0 || start_y < 0 || x<MAP_SIZE; x++)  {
-    //     for (int y=3; y<MAP_SIZE; y++)  {
-    //         if (map[MAP_LAYER_BLOCKABLE][y][x] > 0) {
-    //             start_x = x;
-    //             start_y = y;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    player_pos.x = start_x*TILE_SIZE - wizard_bbox.x + (TILE_SIZE-wizard_bbox.width)/2 ;
-    player_pos.y = start_y*TILE_SIZE - wizard_bbox.y + (TILE_SIZE-wizard_bbox.height)/2;
-
-    player_direction = DIR_DOWN;
 
     // head colors
     uint8_t got_colors = 0;
@@ -832,83 +925,113 @@ void start_game() {
     }
     damage_color = freq_color2;
 
-    // spells
-    last_cast_key_press_frame = 0;
-    for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
-
     n_frostbite_colors = sizeof(frostbite_colors) / sizeof(frostbite_colors[0]);
 
-    // items
-    int total_unlockable_objects = sizeof(unlockable_objects) / sizeof(unlockable_objects[0]);
-    n_unlockable_objects = 0;
-    for (int i=0;i<total_unlockable_objects;++i) {
-        if (unlockable_objects[i][0] != 0) {
-            n_unlockable_objects++;
-        }
-    }
-    for (int s=0; s<n_spells; s++) {
-        if (item_unlock_spell[s] == collected_items)
-            unlocked_spells[s] = true;
-    }
-
-
-    // monsters bbox
-    for (int m=0;m<n_monster_types;++m) {
-        minx = CHARACTER_SIZE;
-        maxw = 0;
-        miny = CHARACTER_SIZE;
-        maxh = 0;
-        for (int i=0; i<32; i++)  {
-            riv_recti r = riv_get_sprite_bbox(i,monster_types[m].ssid,1,1);
-            if (r.x < minx) minx = r.x;
-            if (r.width > maxw) maxw = r.width;
-            if (r.y < miny) miny = r.y;
-            if (r.height > maxh) maxh = r.height;
-        }
-        if (minx + maxw > CHARACTER_SIZE) maxw = CHARACTER_SIZE - minx;
-        if (miny+maxh > CHARACTER_SIZE) maxh = CHARACTER_SIZE - miny;
-        minx = minx + maxw/2 - TILE_SIZE/2;
-        maxw = TILE_SIZE;
-
-        monster_types[m].bbox.x = minx;
-        monster_types[m].bbox.y = miny+maxh-maxw;
-        monster_types[m].bbox.width = maxw;
-        monster_types[m].bbox.height = maxw;
-    }
-
-    // initialize monsters spawn point
-    int spawn_points_defined = 0;
-    for (int y=0;y<MAP_SIZE;++y) {
-        for (int x=0;x<MAP_SIZE;++x) {
-            for (int i=0;i<n_monster_types;++i) {
-                if (monster_types[i].spawn_point.x == -1 && monster_types[i].spawn_point.y == -1 &&
-                        monster_types[i].spawn_object == map[MAP_LAYER_BLOCKABLE][y][x]) {
-                    monster_types[i].spawn_point.x = x*TILE_SIZE - monster_types[i].bbox.x +
-                        (TILE_SIZE-monster_types[i].bbox.width)/2 ;
-                    monster_types[i].spawn_point.y = y*TILE_SIZE - monster_types[i].bbox.y +
-                        (TILE_SIZE-monster_types[i].bbox.height)/2;
-                    spawn_points_defined++;
-                }
-            }
-
-            if (spawn_points_defined == n_monster_types) break;
-        }
-        if (spawn_points_defined == n_monster_types) break;
-    }
+    started = true;
+    start_frame = riv->frame;
+    total_frames = 0;
 
     life_points = starting_life_points;
+}
+
+void start_level() {
+    if (new_level) {
+        current_level++;
+        if (current_level == n_levels) {
+            end_session();
+            return;
+        }
+    }
+    new_level = false;
+
+    // initialize monsters
+    initialize_level_monsters();
+
+    // initialize sound variables
+    sound_id = clampu(map_sounds[current_level],1,imported_sounds);
+    seqt_sound *sound = &seqt.sounds[sound_id & (SEQT_MAX_SOUNDS-1)];
+    hits_per_second = sound->source->bpm*((1.0*TIME_SIG)/60);
+    note_period = hits_per_second/riv->target_fps;
+    frames_per_beat = riv->target_fps/(sound->source->bpm/60.0);
+    frames_per_sprite = frames_per_beat / CHARACTER_ANIM_SPRITES;
+    beat_guide_tick_size = (SCREEN_SIZE / BEAT_TICKS) / frames_per_beat;
+    sync_hit = frames_per_beat * sync_factor;
+    moving_frames = (int)ceil(frames_per_beat / 4);
+    speed = (int)ceil((1.0*TILE_SIZE)/moving_frames);
+    cast_hit_anim_frames = riv->target_fps/CAST_HIT_ANIM_FPS_FRACTION;
+    damage_anim_frames = riv->target_fps/DAMAGE_ANIM_FPS_FRACTION;
+    life_anim_frames = riv->target_fps/LIFE_DAMAGE_ANIM_FPS_FRACTION;
+    sync_frames = clamp(sync_frames,-sync_hit,sync_hit);
 
     seqt_set_start(sound_id,(4.0*frames_per_beat)/riv->target_fps);
     seqt_seek(sound_id,0);
 
-    // riv_printf("START\n");
-}
+    last_beat_frame_press = 0;
+    last_sync_frame_press = 0;
+    last_out_of_sync_frame_press = 0;
+    last_note_frame = -1;
+    note_time = 0;
+    gameplay_beats = -1;
 
-void end_session() {
-    about_to_end = true;
-    update_score();
-    // Quit in 2 seconds
-    riv->quit_frame = riv->frame + 1*riv->target_fps;
+    diff_frames = 0;
+    last_beat_frame = riv->frame;
+    last_move_frame = 0;
+
+    // release_spell_anim_frames = (int)ceil(frames_per_beat * 6 / 4);
+
+    // reset item layer
+    for (int y=0;y<MAP_SIZE;++y) {
+        for (int x=0;x<MAP_SIZE;++x) {
+            maps[current_level][MAP_LAYER_ITEMS][y][x] = -1;
+        }
+    }
+
+    // int start_x = 4;
+    // int start_y = 6;
+
+    // for (int x=3; start_x < 0 || start_y < 0 || x<MAP_SIZE; x++)  {
+    //     for (int y=3; y<MAP_SIZE; y++)  {
+    //         if (map[MAP_LAYER_BLOCKABLE][y][x] > 0) {
+    //             start_x = x;
+    //             start_y = y;
+    //             break;
+    //         }
+    //     }
+    // }
+
+    player_pos.x = initial_positions[current_level][0]*TILE_SIZE - wizard_bbox.x + (TILE_SIZE-wizard_bbox.width)/2 ;
+    player_pos.y = initial_positions[current_level][1]*TILE_SIZE - wizard_bbox.y + (TILE_SIZE-wizard_bbox.height)/2;
+
+    player_direction = DIR_DOWN;
+
+    // spells
+    last_cast_key_press_frame = 0;
+    chain_cast = 0;
+    for (int i=0; i<MAX_CAST; i++) cast_queue[i] = -1;
+    completed_spell = -1;
+    released_spell = -1;
+
+
+    // items
+    int total_unlockable_objects = sizeof(unlockable_objects) / sizeof(unlockable_objects[0]);
+    level_unlockable_objects = 0;
+    for (int i=0;i<total_unlockable_objects;++i) {
+        if (unlockable_objects[i][0] != 0 && unlockable_objects[i][1] == current_level) {
+            level_unlockable_objects++;
+        }
+    }
+    for (int s=0; s<n_spells; s++) {
+        if (item_unlock_spell[s] == unlock_collected_items)
+            unlocked_spells[s] = true;
+    }
+    level_collected_items = 0;
+    level_objects = 0;
+
+    // monsters
+    n_monsters = 0;
+    level_killed_monsters = 0;
+
+    // riv_printf("START\n");
 }
 
 uint64_t get_note_x(seqt_sound *sound, uint64_t track,uint64_t note_frame) {
@@ -925,8 +1048,7 @@ uint64_t get_note_frame(seqt_sound *sound, uint64_t frame) {
 }
 
 void play_music() {
-    if (!music_bpm) return;
-    seqt_sound *sound = seqt_get_sound(sound_id);
+    seqt_sound *sound = &seqt.sounds[sound_id & (SEQT_MAX_SOUNDS-1)];
     if (!sound || !sound->source) return;
     seqt_poll_sound(sound);
     if (sound->frame >= sound->stop_frame) return;
@@ -1050,6 +1172,14 @@ void update_help_screen() {
     }
 }
 
+void update_level_increase() {
+    if (riv->keys[RIV_GAMEPAD1_START].press) {
+        help_screen = false;
+        diff_frames = 0;
+        last_beat_frame = riv->frame;
+    }
+}
+
 void update_state() {
     if (!help_screen && riv->keys[RIV_GAMEPAD1_START].press) {
         help_screen = true;
@@ -1068,19 +1198,34 @@ void update_state() {
 
     // Add item/crystal
     if (!diff_frames) {
-        if (collected_items < n_unlockable_objects) {
-            for (int i=0;i<n_unlockable_objects;++i) {
+        if (level_collected_items < level_unlockable_objects) {
+            for (int i=unlock_collected_items;i<unlock_collected_items+level_unlockable_objects;++i) {
                 // add obj
-                if (gameplay_beats == unlockable_objects[i][1]) {
-                    map[MAP_LAYER_ITEMS][unlockable_objects[i][3]][unlockable_objects[i][2]] = unlockable_objects[i][4];
+                // active,level,beat_frame,x,y,obj
+                if (current_level == unlockable_objects[i][1] && gameplay_beats == unlockable_objects[i][2]) {
+                    maps[current_level][MAP_LAYER_ITEMS][unlockable_objects[i][4]][unlockable_objects[i][3]] = unlockable_objects[i][5];
                     last_item_add_beat = gameplay_beats;
+                    level_objects++;
+                } else if (!unlockable_objects[i][0] || unlockable_objects[i][1] > current_level) {
+                    break;
                 }
             }
-        } else if (gameplay_beats > last_item_add_beat + item_interval) {
-            uint64_t i = riv_rand_uint(MAX_ITEM_POSITIONS-1);
+        } else if (gameplay_beats > last_item_add_beat + bonus_objects[current_level][0] && level_objects < level_unlockable_objects+bonus_objects[current_level][1]) {
+            bool spawned_obj = false;
+            while (!spawned_obj) {
+                uint64_t x = riv_rand_uint(MAP_SIZE-1);
+                uint64_t y = riv_rand_uint(MAP_SIZE-1);
+                riv_vec2i pos = {
+                    TILE_SIZE*x+TILE_SIZE/2,
+                    TILE_SIZE*y+TILE_SIZE/2};
 
-            map[MAP_LAYER_ITEMS][item_positions[i][1]][item_positions[i][0]] = item_id_to_add;
-            last_item_add_beat = gameplay_beats;
+                if (collides_with_layer(current_level,pos,MAP_LAYER_GROUND)) {
+                    maps[current_level][MAP_LAYER_ITEMS][y][x] = item_id_to_add;
+                    spawned_obj = true;
+                    last_item_add_beat = gameplay_beats;
+                    level_objects++;
+                }
+            }
         }
     }
 
@@ -1144,7 +1289,7 @@ void update_state() {
         beat_sequence_hits++;
     }
 
-    if (lock_gameplay && beat_sequence_hits > UNLOCK_GAMEPLAY_HITS) {
+    if (lock_gameplay && beat_sequence_hits >= UNLOCK_GAMEPLAY_HITS) {
         lock_gameplay = false;
         good_help_frame = riv->frame;
     }
@@ -1175,7 +1320,7 @@ void update_state() {
         riv_vec2i new_postl = {
             player_pos.x+dx+wizard_bbox.x,
             player_pos.y+dy+wizard_bbox.y};
-        if (!(collides_with_layer(new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
+        if (!(collides_with_layer(current_level, new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
             last_move_frame = riv->frame;
             last_move_dir = player_direction;
             moved_frames = 0;
@@ -1241,26 +1386,30 @@ void update_state() {
                 player_pos.x+wizard_bbox.x,
                 player_pos.y+wizard_bbox.y};
             // collision with item
-            int16_t collided_obj = collides_with_layer(player_base, MAP_LAYER_ITEMS);
+            int16_t collided_obj = collides_with_layer(current_level, player_base, MAP_LAYER_ITEMS);
             if (collided_obj == 1 || collided_obj == 13 || collided_obj == 17 || collided_obj == 30) {
                 riv_waveform(&coin1_sfx);
                 riv_waveform(&coin2_sfx);
                 if (collided_obj == 1) {
-                    map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = 4; // open chest
+                    maps[current_level][MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = 4; // open chest
                 } else {
-                    map[MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = -1; // remove obj
+                    maps[current_level][MAP_LAYER_ITEMS][(int)(player_base.y/TILE_SIZE)][(int)(player_base.x/TILE_SIZE)] = -1; // remove obj
                 }
-                collected_items++;
-                bool new_spells = false;
-                for (int s=0; s<n_spells; s++) {
-                    if (item_unlock_spell[s] == collected_items) {
-                        unlocked_spells[s] = true;
-                        new_spells = true;
+                total_collected_items++;
+                level_collected_items++;
+                if (collided_obj == 1 || collided_obj == 13) {
+                    unlock_collected_items++;
+                    bool new_spells = false;
+                    for (int s=0; s<n_spells; s++) {
+                        if (item_unlock_spell[s] == unlock_collected_items) {
+                            unlocked_spells[s] = true;
+                            new_spells = true;
+                        }
                     }
-                }
-                if (new_spells) {
-                    help_frame = riv->frame;
-                    item_help = collected_items;
+                    if (new_spells) {
+                        help_frame = riv->frame;
+                        item_help = unlock_collected_items;
+                    }
                 }
             }
 
@@ -1353,7 +1502,7 @@ void update_state() {
                         monsters[i].pos.x+monsters[i].type->bbox.x+dx*TILE_SIZE,
                         monsters[i].pos.y+monsters[i].type->bbox.y+dy*TILE_SIZE};
                     monsters[i].moving = STANDING;
-                    if (!(collides_with_layer(new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
+                    if (!(collides_with_layer(current_level, new_postl, MAP_LAYER_BLOCKABLE) > 0)) {
                         // move = true;
                         // last_move_frame = riv->frame;
                         // last_move_dir = player_direction;
@@ -1393,6 +1542,7 @@ void update_state() {
                 monsters[i].life_points -= spell_damage[released_spell];
                 if (monsters[i].life_points <= 0) {
                     // Killed monster
+                    level_killed_monsters++;
                     monsters[i].type->n_killed++;
                 }
 
@@ -1419,7 +1569,7 @@ void update_state() {
     }
 
     // spawn monsters
-    if (!diff_frames) {
+    if (!diff_frames && n_monsters < max_level_monsters[current_level] ) {
         for (int i = 0; i < n_monster_types; i++) {
             if (monster_types[i].n_notes/monster_types[i].notes_to_spawn > monster_types[i].n_spawned) {
                 if (monster_types[i].spawn_point.x > -1 && monster_types[i].spawn_point.y > -1) {
@@ -1468,6 +1618,7 @@ void update_state() {
                 monsters[i].life_points--;
                 if (monsters[i].life_points <= 0) {
                     // Killed monster
+                    level_killed_monsters++;
                     monsters[i].type->n_killed++;
                 }
                 monsters[i].life_loss_frame = riv->frame;
@@ -1498,6 +1649,7 @@ void update_state() {
                         monsters[i].life_points -= spell_damage[released_spell];
                         if (monsters[i].life_points <= 0) {
                             // Killed monster
+                            level_killed_monsters++;
                             monsters[i].type->n_killed++;
                         }
                         monsters[i].life_loss_frame = riv->frame;
@@ -1510,6 +1662,10 @@ void update_state() {
         last_damage_frame = riv->frame;
     }
     if (!lock_gameplay) total_frames++;
+    if (level_killed_monsters >= max_level_monsters[current_level]) {
+        new_level_frame = riv->frame;
+        new_level = true;
+    }
     update_score();
 }
 
@@ -1615,14 +1771,15 @@ void draw_map() {
         // Draw tile grid
         for (int y=0;y<MAP_SIZE;++y) {
             for (int x=0;x<MAP_SIZE;++x) {
-                int id = map[l][y][x];
+                int id = maps[current_level][l][y][x];
                 if (id > 0) {
                     // Draw object sprite
                     riv_draw_sprite(id, tileset_sps, x*TILE_SIZE, y*TILE_SIZE, 1, 1, 1, 1);
                 }
             }
         }
-    }if (display_grid_lines) {
+    }
+    if (display_grid_lines) {
         for (int y=0;y<MAP_SIZE;++y) {
             for (int x=0;x<MAP_SIZE;++x) {
                 riv_draw_rect_line(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE, RIV_COLOR_DARKSLATE);
@@ -1638,8 +1795,8 @@ void draw_map_top() {
     // Draw tile grid
     for (int y=0;y<MAP_SIZE;++y) {
         for (int x=0;x<MAP_SIZE;++x) {
-            int id = map[l][y][x];
-            if (id > 0) {
+            int id = maps[current_level][l][y][x];
+            if (id >= 0) {
                 // Draw object sprite
                 riv_draw_sprite(id, tileset_sps, x*TILE_SIZE, y*TILE_SIZE, 1, 1, 1, 1);
             }
@@ -1758,7 +1915,7 @@ void draw_item_help() {
         if (riv->frame < help_frame + HELP_FRAMES_SECONDS*riv->target_fps) {
             uint32_t top = TILE_SIZE/2 + 2;
             for (int s=0; s<n_spells; s++) {
-                if (item_unlock_spell[s] == collected_items) {
+                if (item_unlock_spell[s] == unlock_collected_items) {
                     draw_spell_recipe(s, RIV_TOP, SCREEN_SIZE/2,top, 2, RIV_COLOR_WHITE);
                     top += TILE_SIZE/2;
                 }
@@ -1819,6 +1976,20 @@ void draw_stats() {
         int dh = 4 - (riv->frame-last_life_loss_frame)*4/life_anim_frames;
         int xsize = lost_size - (riv->frame-last_life_loss_frame)*lost_size/life_anim_frames;
         riv_draw_rect_fill(2*TILE_SIZE+life_bar_size,SCREEN_SIZE-9-dh/2,xsize,5+dh,RIV_COLOR_WHITE);
+    }
+}
+
+void draw_new_level_screen() {
+    if (current_level != n_levels) {
+        riv_draw_text("LEVEL CLEARED", RIV_SPRITESHEET_FONT_5X7, RIV_CENTER, SCREEN_SIZE/2,SCREEN_SIZE/2, 3, RIV_COLOR_WHITE);
+    }
+}
+
+void draw_end() {
+    if (current_level == n_levels) {
+        riv_draw_text("THE END", RIV_SPRITESHEET_FONT_5X7, RIV_CENTER, SCREEN_SIZE/2,SCREEN_SIZE/2, 4, RIV_COLOR_WHITE);
+    } else {
+        riv_draw_text("GAME OVER", RIV_SPRITESHEET_FONT_5X7, RIV_CENTER, SCREEN_SIZE/2,SCREEN_SIZE/2, 4, RIV_COLOR_WHITE);
     }
 }
 
@@ -2082,15 +2253,18 @@ void update() {
     } else if (!started) { // waiting
         if (riv->frame > random_wait_frame) {
             start_game();
+            start_level();
         }
-    } else if (!about_to_end) {
+    } else if (!ended) {
         if (!help_screen) {
-            update_state();
+            if (!new_level || riv->frame > new_level_frame + NEW_LEVEL_ANIM_SECS*riv->target_fps) {
+                update_state();
+            } else if (new_level && riv->frame == new_level_frame + NEW_LEVEL_ANIM_SECS*riv->target_fps) {
+                start_level();
+            }
         } else {
             update_help_screen();
         }
-    } else if (!ended) {
-        ended = true;
     }
 }
 
@@ -2102,7 +2276,15 @@ void draw() {
     } else if (!ended) {
         riv_clear(RIV_COLOR_DARKSLATE);
         draw_map();
-        if (!help_screen) {
+        if (new_level && riv->frame < new_level_frame + NEW_LEVEL_ANIM_SECS*riv->target_fps) {
+            draw_monsters();
+            draw_player();
+            draw_map_top();
+            draw_stats();
+            if (new_level && riv->frame < new_level_frame - 1 + NEW_LEVEL_ANIM_SECS*riv->target_fps) {
+                draw_new_level_screen();
+            }
+        } else if (!help_screen) {
             draw_monsters();
             draw_player();
             draw_spell();
@@ -2117,7 +2299,7 @@ void draw() {
             draw_help_screen();
         }
     } else {
-        riv_draw_text("Game Over", RIV_SPRITESHEET_FONT_5X7, RIV_CENTER, SCREEN_SIZE/2,SCREEN_SIZE/2, 2, RIV_COLOR_WHITE);
+        draw_end();
     }
 }
 
@@ -2149,6 +2331,8 @@ int main(int argc, char* argv[]) {
                 kill_bonus = strtof(argv[i+1], NULL);
             } else if (strcmp(argv[i], "-item-bonus") == 0) {
                 item_bonus = strtof(argv[i+1], NULL);
+            } else if (strcmp(argv[i], "-level-bonus") == 0) {
+                level_bonus = strtof(argv[i+1], NULL);
             } else if (strcmp(argv[i], "-spawn-decrease-interval") == 0) {
                 spawn_decrease_interval = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-display-grid-lines") == 0) {
@@ -2161,46 +2345,29 @@ int main(int argc, char* argv[]) {
                 lock_gameplay = atoi(argv[i+1]);
             } else if (strcmp(argv[i], "-display-starting-sync") == 0) {
                 display_starting_sync = atoi(argv[i+1]);
-            } else if (strcmp(argv[i], "-monster-notes-to-spawn") == 0) {
-                char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    monster_notes_to_spawn[t] = atoi(token);
-                    token = strtok(NULL, delim);
-                }
-            } else if (strcmp(argv[i], "-monster-notes-to-move") == 0) {
-                char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    monster_notes_to_move[t] = atoi(token);
-                    token = strtok(NULL, delim);
-                }
-            } else if (strcmp(argv[i], "-monster-damage") == 0) {
-                char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    monster_damage[t] = atoi(token);
-                    token = strtok(NULL, delim);
-                }
-            } else if (strcmp(argv[i], "-monster-initial-life-points") == 0) {
-                char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    monster_initial_life_points[t] = atoi(token);
-                    token = strtok(NULL, delim);
-                }
-            } else if (strcmp(argv[i], "-monster-spawn-object") == 0) {
-                char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    monster_spawn_object[t] = atoi(token);
-                    token = strtok(NULL, delim);
-                }
-            } else if (strcmp(argv[i], "-monster-tracks") == 0) {
-                char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    monster_tracks[t] = atoi(token);
-                    token = strtok(NULL, delim);
-                }
             } else if (strcmp(argv[i], "-item-unlock-spell") == 0) {
                 char *token = strtok(argv[i+1], delim);
                 for (int t = 0; token != NULL && t < n_spells; t++) {
                     item_unlock_spell[t] = atoi(token);
+                    token = strtok(NULL, delim);
+                }
+            } else if (strcmp(argv[i], "-n-levels") == 0) {
+                n_levels = atoi(argv[i+1]);
+            } else if (strcmp(argv[i], "-max-level-monsters") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MAPS; t++) {
+                    max_level_monsters[t] = atoi(token);
+                    token = strtok(NULL, delim);
+                }
+            } else if (strcmp(argv[i], "-monsters-config") == 0) {
+                for (int i=0;i<MAX_MONSTER_CONFIGS;++i) {
+                    monsters_config[i][0] = 0;
+                }
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MONSTER_CONFIGS; t++) {
+                    int r = t/11;
+                    int c = t%11;
+                    monsters_config[r][c] = atoi(token);
                     token = strtok(NULL, delim);
                 }
             } else if (strcmp(argv[i], "-unlockable-objects") == 0) {
@@ -2208,20 +2375,26 @@ int main(int argc, char* argv[]) {
                     unlockable_objects[i][0] = 0;
                 }
                 char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_MONSTER_TYPES; t++) {
-                    int r = t/5;
-                    int c = t%5;
+                for (int t = 0; token != NULL && t < MAX_UNLOCKABLE_ITEMS; t++) {
+                    int r = t/6;
+                    int c = t%6;
                     unlockable_objects[r][c] = atoi(token);
                     token = strtok(NULL, delim);
                 }
-            } else if (strcmp(argv[i], "-item-interval") == 0) {
-                item_interval = atoi(argv[i+1]);
-            } else if (strcmp(argv[i], "-item-positions") == 0) {
+            } else if (strcmp(argv[i], "-bonus-objects") == 0) {
                 char *token = strtok(argv[i+1], delim);
-                for (int t = 0; token != NULL && t < MAX_ITEM_POSITIONS; t++) {
+                for (int t = 0; token != NULL && t < MAX_MAPS; t++) {
                     int r = t/2;
                     int c = t%2;
-                    item_positions[r][c] = atoi(token);
+                    bonus_objects[r][c] = atoi(token);
+                    token = strtok(NULL, delim);
+                }
+            } else if (strcmp(argv[i], "-initial-positions") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < MAX_MAPS; t++) {
+                    int r = t/2;
+                    int c = t%2;
+                    initial_positions[r][c] = atoi(token);
                     token = strtok(NULL, delim);
                 }
             } else if (strcmp(argv[i], "-spell-damage") == 0) {
@@ -2236,6 +2409,12 @@ int main(int argc, char* argv[]) {
                     spell_beats_duration[t] = strtof(token, NULL);
                     token = strtok(NULL, delim);
                 }
+            } else if (strcmp(argv[i], "-map-sounds") == 0) {
+                char *token = strtok(argv[i+1], delim);
+                for (int t = 0; token != NULL && t < n_spells; t++) {
+                    map_sounds[t] = atoi(token);
+                    token = strtok(NULL, delim);
+                }
             }
         }
     }
@@ -2245,6 +2424,42 @@ int main(int argc, char* argv[]) {
     riv->target_fps = fps;
 
     initialize();
+
+    // FILE *write_ptr;
+
+    // write_ptr = fopen("incards/map1.rivcard","wb");  // w for write, b for binary
+    // fwrite("RCMP",4,1,write_ptr);
+
+    // for (int l=0;l<MAP_LAYERS;++l) {
+    //     for (int y=0;y<MAP_SIZE;++y) {
+    //         for (int x=0;x<MAP_SIZE;++x) {
+    //             fwrite(&maps[0][l][y][x],sizeof(int16_t),1,write_ptr);
+    //         }
+    //     }
+    // }
+    // fclose(write_ptr);
+
+    // write_ptr = fopen("incards/map2.rivcard","wb");  // w for write, b for binary
+    // fwrite("RCMP",4,1,write_ptr);
+    // for (int l=0;l<MAP_LAYERS;++l) {
+    //     for (int y=0;y<MAP_SIZE;++y) {
+    //         for (int x=0;x<MAP_SIZE;++x) {
+    //             fwrite(&maps[1][l][y][x],sizeof(int16_t),1,write_ptr);
+    //         }
+    //     }
+    // }
+    // fclose(write_ptr);
+
+    // write_ptr = fopen("incards/map3.rivcard","wb");  // w for write, b for binary
+    // fwrite("RCMP",4,1,write_ptr);
+    // for (int l=0;l<MAP_LAYERS;++l) {
+    //     for (int y=0;y<MAP_SIZE;++y) {
+    //         for (int x=0;x<MAP_SIZE;++x) {
+    //             fwrite(&maps[2][l][y][x],sizeof(int16_t),1,write_ptr);
+    //         }
+    //     }
+    // }
+    // fclose(write_ptr);
 
     do { // main loop
         update();
